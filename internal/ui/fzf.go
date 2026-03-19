@@ -13,7 +13,7 @@ import (
 )
 
 var ErrFzfNotInstalled = errors.New("fzf not installed")
-var ErrSelectionCanceled = errors.New("fzf selection canceled")
+var ErrSelectionCanceled = errors.New("selection canceled")
 
 type Runner interface {
 	LookPath(file string) (string, error)

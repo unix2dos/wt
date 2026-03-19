@@ -538,7 +538,7 @@ func TestRunRejectsExtraArgsAfterSwitchPathFzf(t *testing.T) {
 	}
 }
 
-func TestRunSwitchPathInteractiveSelectionWritesMenuToStderrAndPathToStdout(t *testing.T) {
+func TestRunSwitchPathInteractiveSelectionWritesTUIToStderrAndPathToStdout(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	deps := fakeDeps{
@@ -555,7 +555,7 @@ func TestRunSwitchPathInteractiveSelectionWritesMenuToStderrAndPathToStdout(t *t
 		},
 	}
 
-	code := Run(context.Background(), nil, strings.NewReader("2\n"), stdout, stderr, deps)
+	code := Run(context.Background(), nil, strings.NewReader("\x1b[B\r"), stdout, stderr, deps)
 
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
@@ -563,11 +563,11 @@ func TestRunSwitchPathInteractiveSelectionWritesMenuToStderrAndPathToStdout(t *t
 	if stdout.String() != "/repo/.worktrees/alpha\n" {
 		t.Fatalf("expected selected path on stdout, got %q", stdout.String())
 	}
-	if !bytes.Contains(stderr.Bytes(), []byte("[1] * main /repo")) {
-		t.Fatalf("expected menu on stderr, got %q", stderr.String())
+	if !bytes.Contains(stderr.Bytes(), []byte("Enter to confirm")) {
+		t.Fatalf("expected tui instructions on stderr, got %q", stderr.String())
 	}
-	if !bytes.Contains(stderr.Bytes(), []byte("Select a worktree")) {
-		t.Fatalf("expected prompt on stderr, got %q", stderr.String())
+	if !bytes.Contains(stderr.Bytes(), []byte("> [2]   alpha /repo/.worktrees/alpha")) {
+		t.Fatalf("expected active row on stderr, got %q", stderr.String())
 	}
 	if deps.touched.repoKey != "/repo/.git" || deps.touched.path != "/repo/.worktrees/alpha" {
 		t.Fatalf("expected state touch after interactive switch, got %#v", deps.touched)

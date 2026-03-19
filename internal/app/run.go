@@ -134,19 +134,16 @@ func runSwitchPath(ctx context.Context, args []string, in io.Reader, out io.Writ
 		}
 		warnStateIssue(errOut, warn)
 
-		ui.RenderMenu(errOut, items)
-		index, err := ui.ReadSelection(in, errOut, len(items))
+		selected, err := ui.SelectWorktreeWithTUI(in, errOut, items, ui.OSRawMode{})
 		if err != nil {
+			if errors.Is(err, ui.ErrSelectionCanceled) {
+				return 130
+			}
 			if errors.Is(err, io.EOF) {
 				return 1
 			}
 			fmt.Fprintln(errOut, err)
 			return 1
-		}
-		selected, ok := selectByIndex(items, index)
-		if !ok {
-			fmt.Fprintf(errOut, "worktree index %d out of range\n", index)
-			return 2
 		}
 		fmt.Fprintln(out, selected.Path)
 		warnStateIssue(errOut, touchWorktreeStateBestEffort(ctx, deps, repoKey, selected.Path))

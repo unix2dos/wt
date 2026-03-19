@@ -13,13 +13,28 @@ import (
 
 func RenderMenu(w io.Writer, items []worktree.Worktree) {
 	for _, item := range items {
-		marker := " "
-		if item.IsCurrent {
-			marker = "*"
-		}
-		fmt.Fprintf(w, "[%d] %s %s %s\n", item.Index, marker, item.BranchLabel, item.Path)
+		fmt.Fprintln(w, formatMenuRow(item))
 	}
 	fmt.Fprint(w, "Select a worktree [number]: ")
+}
+
+func formatMenuRow(item worktree.Worktree) string {
+	return fmt.Sprintf("[%d] %s %s %s", item.Index, worktreeMarker(item), item.BranchLabel, item.Path)
+}
+
+func formatTUIRow(item worktree.Worktree, active bool) string {
+	prefix := " "
+	if active {
+		prefix = ">"
+	}
+	return fmt.Sprintf("%s %s", prefix, formatMenuRow(item))
+}
+
+func worktreeMarker(item worktree.Worktree) string {
+	if item.IsCurrent {
+		return "*"
+	}
+	return " "
 }
 
 func ReadSelection(in io.Reader, errOut io.Writer, max int) (int, error) {
