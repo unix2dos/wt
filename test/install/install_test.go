@@ -42,6 +42,53 @@ func TestInstallIsIdempotentAndBuildsBinary(t *testing.T) {
 	}
 }
 
+func TestInstallSupportsCustomRcFileAndBinDir(t *testing.T) {
+	home := t.TempDir()
+	rcPath := filepath.Join(home, ".config", "wt-test.rc")
+	binDir := filepath.Join(home, ".bin")
+
+	runInstall(t, home, "--shell", "bash", "--rc-file", rcPath, "--bin-dir", binDir)
+
+	data, err := os.ReadFile(rcPath)
+	if err != nil {
+		t.Fatalf("read rc file: %v", err)
+	}
+
+	repoRoot := projectRoot(t)
+	sourceLine := "source \"" + filepath.Join(repoRoot, "shell", "cwt.sh") + "\""
+	if !strings.Contains(string(data), sourceLine) {
+		t.Fatalf("expected source line in custom rc file, got %q", string(data))
+	}
+
+	binPath := filepath.Join(binDir, "wt")
+	if _, err := os.Stat(binPath); err != nil {
+		t.Fatalf("expected custom binary at %s: %v", binPath, err)
+	}
+}
+
+func TestUninstallRemovesManagedBlockAndBinary(t *testing.T) {
+	home := t.TempDir()
+	rcPath := filepath.Join(home, ".zshrc")
+	if err := os.WriteFile(rcPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("write rc file: %v", err)
+	}
+
+	runInstall(t, home)
+	runUninstall(t, home)
+
+	if _, err := os.Stat(filepath.Join(home, ".local", "bin", "wt")); !os.IsNotExist(err) {
+		t.Fatalf("expected binary to be removed, got err=%v", err)
+	}
+
+	data, err := os.ReadFile(rcPath)
+	if err != nil {
+		t.Fatalf("read rc file: %v", err)
+	}
+	if strings.Contains(string(data), "wt shell wrapper begin") {
+		t.Fatalf("expected managed block removed, got %q", string(data))
+	}
+}
+
 func TestCwtChangesDirectoryOnSuccess(t *testing.T) {
 	repoRoot := projectRoot(t)
 	origin := t.TempDir()
@@ -103,10 +150,11 @@ func TestCwtLeavesDirectoryOnEmptyOutput(t *testing.T) {
 	}
 }
 
-func runInstall(t *testing.T, home string) {
+func runInstall(t *testing.T, home string, args ...string) {
 	t.Helper()
 
-	cmd := exec.Command("bash", "install.sh")
+	cmdArgs := append([]string{"install.sh"}, args...)
+	cmd := exec.Command("bash", cmdArgs...)
 	cmd.Dir = projectRoot(t)
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
@@ -117,6 +165,23 @@ func runInstall(t *testing.T, home string) {
 		return
 	}
 	t.Fatalf("install failed: %v\n%s", err, out)
+}
+
+func runUninstall(t *testing.T, home string, args ...string) {
+	t.Helper()
+
+	cmdArgs := append([]string{"uninstall.sh"}, args...)
+	cmd := exec.Command("bash", cmdArgs...)
+	cmd.Dir = projectRoot(t)
+	cmd.Env = append(os.Environ(),
+		"HOME="+home,
+		"SHELL=/bin/zsh",
+	)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return
+	}
+	t.Fatalf("uninstall failed: %v\n%s", err, out)
 }
 
 func runShell(t *testing.T, repoRoot, script string) string {

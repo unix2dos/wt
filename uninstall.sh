@@ -3,8 +3,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR"
-WRAPPER_PATH="$REPO_ROOT/shell/cwt.sh"
 RC_MARKER_BEGIN="# wt shell wrapper begin"
 RC_MARKER_END="# wt shell wrapper end"
 INSTALL_SHELL=""
@@ -13,26 +11,11 @@ BIN_DIR="$HOME/.local/bin"
 
 usage() {
   cat <<'EOF'
-Usage: bash install.sh [--shell zsh|bash] [--rc-file PATH] [--bin-dir PATH]
+Usage: bash uninstall.sh [--shell zsh|bash] [--rc-file PATH] [--bin-dir PATH]
 
-Installs `wt` to the target bin directory and appends a managed block that
-sources `shell/cwt.sh` from the chosen shell rc file.
+Removes the installed `wt` binary and deletes the managed shell block that
+sources `shell/cwt.sh`.
 EOF
-}
-
-strip_managed_block() {
-  local rc_file="$1"
-  local tmp
-
-  [ -f "$rc_file" ] || return 0
-
-  tmp="$(mktemp)"
-  awk -v begin="$RC_MARKER_BEGIN" -v end="$RC_MARKER_END" '
-    $0 == begin { skip = 1; next }
-    $0 == end { skip = 0; next }
-    skip != 1 { print }
-  ' "$rc_file" >"$tmp"
-  mv "$tmp" "$rc_file"
 }
 
 parse_args() {
@@ -110,41 +93,26 @@ choose_rc_file() {
   printf '%s\n' "$HOME/.zshrc"
 }
 
-append_shell_wrapper() {
+strip_managed_block() {
   local rc_file="$1"
+  local tmp
 
-  mkdir -p "$(dirname "$rc_file")"
-  touch "$rc_file"
-  strip_managed_block "$rc_file"
+  [ -f "$rc_file" ] || return 0
 
-  {
-    printf '%s\n' "$RC_MARKER_BEGIN"
-    printf '%s\n' "if [ -f \"$WRAPPER_PATH\" ]; then"
-    printf '%s\n' "  source \"$WRAPPER_PATH\""
-    printf '%s\n' "fi"
-    printf '%s\n' "$RC_MARKER_END"
-  } >>"$rc_file"
-}
-
-install_binary() {
-  local bin_path="$BIN_DIR/wt"
-
-  mkdir -p "$BIN_DIR"
-  if [ -x "$REPO_ROOT/bin/wt" ]; then
-    cp "$REPO_ROOT/bin/wt" "$bin_path"
-    chmod +x "$bin_path"
-    return
-  fi
-
-  cd "$REPO_ROOT"
-  go build -o "$bin_path" ./cmd/wt
+  tmp="$(mktemp)"
+  awk -v begin="$RC_MARKER_BEGIN" -v end="$RC_MARKER_END" '
+    $0 == begin { skip = 1; next }
+    $0 == end { skip = 0; next }
+    skip != 1 { print }
+  ' "$rc_file" >"$tmp"
+  mv "$tmp" "$rc_file"
 }
 
 parse_args "$@"
-install_binary
 
+rm -f "$BIN_DIR/wt"
 RC_TARGET="$(choose_rc_file)"
-append_shell_wrapper "$RC_TARGET"
+strip_managed_block "$RC_TARGET"
 
-printf 'Installed wt to %s\n' "$BIN_DIR/wt"
-printf 'Updated shell rc: %s\n' "$RC_TARGET"
+printf 'Removed wt from %s\n' "$BIN_DIR/wt"
+printf 'Cleaned shell rc: %s\n' "$RC_TARGET"
