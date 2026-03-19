@@ -24,7 +24,7 @@ func TestFormatFzfCandidatesIncludesIndexMarkerBranchAndPath(t *testing.T) {
 }
 
 func TestSelectWorktreeWithFzfReturnsSelectedWorktree(t *testing.T) {
-	runner := fakeFzfRunner{
+	runner := &fakeFzfRunner{
 		lookPath: "/usr/bin/fzf",
 		stdout:   []byte("2\t \tfeat-a\t/repo/.worktrees/feat-a\n"),
 	}
@@ -39,10 +39,13 @@ func TestSelectWorktreeWithFzfReturnsSelectedWorktree(t *testing.T) {
 	if got.Path != "/repo/.worktrees/feat-a" {
 		t.Fatalf("expected selected worktree, got %#v", got)
 	}
+	if !strings.Contains(strings.Join(runner.gotArgs, " "), "--nth=2..") {
+		t.Fatalf("expected fzf to search non-index fields without rewriting output, args=%q", runner.gotArgs)
+	}
 }
 
 func TestSelectWorktreeWithFzfReturnsErrFzfNotInstalled(t *testing.T) {
-	_, err := SelectWorktreeWithFzf(context.Background(), nil, fakeFzfRunner{
+	_, err := SelectWorktreeWithFzf(context.Background(), nil, &fakeFzfRunner{
 		lookPathErr: errors.New("missing"),
 	})
 	if !errors.Is(err, ErrFzfNotInstalled) {
@@ -53,7 +56,7 @@ func TestSelectWorktreeWithFzfReturnsErrFzfNotInstalled(t *testing.T) {
 func TestSelectWorktreeWithFzfReturnsErrSelectionCanceled(t *testing.T) {
 	_, err := SelectWorktreeWithFzf(context.Background(), []worktree.Worktree{
 		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true},
-	}, fakeFzfRunner{
+	}, &fakeFzfRunner{
 		lookPath: "/usr/bin/fzf",
 		err:      exitError{code: 130},
 	})
@@ -68,13 +71,15 @@ type fakeFzfRunner struct {
 	stdout      []byte
 	stderr      []byte
 	err         error
+	gotArgs     []string
 }
 
 func (f fakeFzfRunner) LookPath(string) (string, error) {
 	return f.lookPath, f.lookPathErr
 }
 
-func (f fakeFzfRunner) Run(_ context.Context, _ string, stdin []byte, _ ...string) ([]byte, []byte, error) {
+func (f *fakeFzfRunner) Run(_ context.Context, _ string, stdin []byte, args ...string) ([]byte, []byte, error) {
+	f.gotArgs = append([]string(nil), args...)
 	return append([]byte(nil), f.stdout...), append([]byte(nil), f.stderr...), f.err
 }
 

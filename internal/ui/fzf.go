@@ -48,7 +48,7 @@ func SelectWorktreeWithFzf(ctx context.Context, items []worktree.Worktree, runne
 	stdout, _, err := runner.Run(ctx, "fzf", input,
 		"--no-sort",
 		"--delimiter=\t",
-		"--with-nth=2..",
+		"--nth=2..",
 		"--prompt=Select a worktree> ",
 	)
 	if err != nil {

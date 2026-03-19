@@ -25,3 +25,20 @@ cwt --fzf
 ```
 
 `wt` prints the selected worktree path. `cwt` is the shell wrapper that changes the current shell directory after `wt` returns a path.
+
+## Smoke Test Matrix
+
+```bash
+wt --help
+wt 1
+printf '2\n' | wt
+wt --fzf
+cwt 1
+```
+
+Installer checks:
+
+```bash
+bash install.sh
+bash install.sh
+```
