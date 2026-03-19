@@ -25,8 +25,7 @@ func TestInstallIsIdempotentAndBuildsBinary(t *testing.T) {
 		t.Fatalf("read rc file: %v", err)
 	}
 
-	repoRoot := projectRoot(t)
-	sourceLine := "source \"" + filepath.Join(repoRoot, "shell", "cwt.sh") + "\""
+	sourceLine := "source \"" + filepath.Join(home, ".local", "bin", "wt-cwt.sh") + "\""
 	if strings.Count(string(data), sourceLine) != 1 {
 		t.Fatalf("expected one managed source line, got %q", string(data))
 	}
@@ -39,6 +38,13 @@ func TestInstallIsIdempotentAndBuildsBinary(t *testing.T) {
 		t.Fatalf("expected built binary at %s: %v", binPath, err)
 	} else if info.Mode()&0o111 == 0 {
 		t.Fatalf("expected built binary to be executable, mode=%v", info.Mode())
+	}
+
+	wrapperPath := filepath.Join(home, ".local", "bin", "wt-cwt.sh")
+	if info, err := os.Stat(wrapperPath); err != nil {
+		t.Fatalf("expected installed wrapper at %s: %v", wrapperPath, err)
+	} else if info.Mode()&0o111 == 0 {
+		t.Fatalf("expected installed wrapper to be executable, mode=%v", info.Mode())
 	}
 }
 
@@ -54,8 +60,7 @@ func TestInstallSupportsCustomRcFileAndBinDir(t *testing.T) {
 		t.Fatalf("read rc file: %v", err)
 	}
 
-	repoRoot := projectRoot(t)
-	sourceLine := "source \"" + filepath.Join(repoRoot, "shell", "cwt.sh") + "\""
+	sourceLine := "source \"" + filepath.Join(binDir, "wt-cwt.sh") + "\""
 	if !strings.Contains(string(data), sourceLine) {
 		t.Fatalf("expected source line in custom rc file, got %q", string(data))
 	}
@@ -63,6 +68,11 @@ func TestInstallSupportsCustomRcFileAndBinDir(t *testing.T) {
 	binPath := filepath.Join(binDir, "wt")
 	if _, err := os.Stat(binPath); err != nil {
 		t.Fatalf("expected custom binary at %s: %v", binPath, err)
+	}
+
+	wrapperPath := filepath.Join(binDir, "wt-cwt.sh")
+	if _, err := os.Stat(wrapperPath); err != nil {
+		t.Fatalf("expected custom wrapper at %s: %v", wrapperPath, err)
 	}
 }
 
@@ -78,6 +88,9 @@ func TestUninstallRemovesManagedBlockAndBinary(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(home, ".local", "bin", "wt")); !os.IsNotExist(err) {
 		t.Fatalf("expected binary to be removed, got err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".local", "bin", "wt-cwt.sh")); !os.IsNotExist(err) {
+		t.Fatalf("expected wrapper to be removed, got err=%v", err)
 	}
 
 	data, err := os.ReadFile(rcPath)

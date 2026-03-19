@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RC_MARKER_BEGIN="# wt shell wrapper begin"
 RC_MARKER_END="# wt shell wrapper end"
+WRAPPER_NAME="wt-cwt.sh"
 INSTALL_SHELL=""
 RC_FILE=""
 BIN_DIR="$HOME/.local/bin"
@@ -14,7 +15,7 @@ usage() {
 Usage: bash uninstall.sh [--shell zsh|bash] [--rc-file PATH] [--bin-dir PATH]
 
 Removes the installed `wt` binary and deletes the managed shell block that
-sources `shell/cwt.sh`.
+sources the installed `wt-cwt.sh` wrapper.
 EOF
 }
 
@@ -111,8 +112,10 @@ strip_managed_block() {
 parse_args "$@"
 
 rm -f "$BIN_DIR/wt"
+rm -f "$BIN_DIR/$WRAPPER_NAME"
 RC_TARGET="$(choose_rc_file)"
 strip_managed_block "$RC_TARGET"
 
 printf 'Removed wt from %s\n' "$BIN_DIR/wt"
+printf 'Removed shell wrapper from %s\n' "$BIN_DIR/$WRAPPER_NAME"
 printf 'Cleaned shell rc: %s\n' "$RC_TARGET"

@@ -39,7 +39,7 @@ source ~/.zshrc
 
 If you use Bash, reload with `source ~/.bashrc` instead.
 
-The installer builds `wt` into `~/.local/bin/wt` and appends a managed shell block that sources `shell/cwt.sh`.
+The installer puts `wt` and the `wt-cwt.sh` shell wrapper into your target bin directory, then appends a managed shell block that sources the installed wrapper.
 
 Source installs require a working Go toolchain.
 

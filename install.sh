@@ -4,7 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$SCRIPT_DIR"
-WRAPPER_PATH="$REPO_ROOT/shell/cwt.sh"
+WRAPPER_SOURCE_PATH="$REPO_ROOT/shell/cwt.sh"
+WRAPPER_NAME="wt-cwt.sh"
 RC_MARKER_BEGIN="# wt shell wrapper begin"
 RC_MARKER_END="# wt shell wrapper end"
 INSTALL_SHELL=""
@@ -16,8 +17,12 @@ usage() {
 Usage: bash install.sh [--shell zsh|bash] [--rc-file PATH] [--bin-dir PATH]
 
 Installs `wt` to the target bin directory and appends a managed block that
-sources `shell/cwt.sh` from the chosen shell rc file.
+sources the installed `wt-cwt.sh` wrapper from the chosen shell rc file.
 EOF
+}
+
+installed_wrapper_path() {
+  printf '%s\n' "$BIN_DIR/$WRAPPER_NAME"
 }
 
 strip_managed_block() {
@@ -112,6 +117,7 @@ choose_rc_file() {
 
 append_shell_wrapper() {
   local rc_file="$1"
+  local wrapper_path="$2"
 
   mkdir -p "$(dirname "$rc_file")"
   touch "$rc_file"
@@ -119,8 +125,8 @@ append_shell_wrapper() {
 
   {
     printf '%s\n' "$RC_MARKER_BEGIN"
-    printf '%s\n' "if [ -f \"$WRAPPER_PATH\" ]; then"
-    printf '%s\n' "  source \"$WRAPPER_PATH\""
+    printf '%s\n' "if [ -f \"$wrapper_path\" ]; then"
+    printf '%s\n' "  source \"$wrapper_path\""
     printf '%s\n' "fi"
     printf '%s\n' "$RC_MARKER_END"
   } >>"$rc_file"
@@ -140,11 +146,22 @@ install_binary() {
   go build -o "$bin_path" ./cmd/wt
 }
 
+install_wrapper() {
+  local wrapper_path
+
+  wrapper_path="$(installed_wrapper_path)"
+  mkdir -p "$BIN_DIR"
+  cp "$WRAPPER_SOURCE_PATH" "$wrapper_path"
+  chmod +x "$wrapper_path"
+}
+
 parse_args "$@"
 install_binary
+install_wrapper
 
 RC_TARGET="$(choose_rc_file)"
-append_shell_wrapper "$RC_TARGET"
+append_shell_wrapper "$RC_TARGET" "$(installed_wrapper_path)"
 
 printf 'Installed wt to %s\n' "$BIN_DIR/wt"
+printf 'Installed shell wrapper to %s\n' "$(installed_wrapper_path)"
 printf 'Updated shell rc: %s\n' "$RC_TARGET"

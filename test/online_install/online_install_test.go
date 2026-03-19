@@ -46,8 +46,12 @@ func TestInstallReleaseScriptInstallsFromTarballURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read rc file: %v", err)
 	}
-	if !strings.Contains(string(data), "source ") || !strings.Contains(string(data), "shell/cwt.sh") {
+	wrapperPath := filepath.Join(binDir, "wt-cwt.sh")
+	if !strings.Contains(string(data), "source \""+wrapperPath+"\"") {
 		t.Fatalf("expected shell wrapper block, got %q", string(data))
+	}
+	if _, err := os.Stat(wrapperPath); err != nil {
+		t.Fatalf("expected installed wrapper: %v", err)
 	}
 }
 
