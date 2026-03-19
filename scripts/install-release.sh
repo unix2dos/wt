@@ -99,7 +99,7 @@ main() {
 
   extract_dir="$(find "$TMPDIR_WT" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
   if [ -z "$extract_dir" ] || [ ! -f "$extract_dir/install.sh" ]; then
-    echo "invalid wt release archive" >&2
+    echo "invalid ww release archive" >&2
     exit 1
   fi
 

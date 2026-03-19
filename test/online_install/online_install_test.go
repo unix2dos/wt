@@ -38,19 +38,22 @@ func TestInstallReleaseScriptInstallsFromTarballURL(t *testing.T) {
 		"WT_TARBALL_URL=file://"+tarball,
 	), "bash", "scripts/install-release.sh", "--shell", "bash", "--rc-file", rcPath, "--bin-dir", binDir)
 
-	if _, err := os.Stat(filepath.Join(binDir, "ww")); err != nil {
-		t.Fatalf("expected installed ww binary: %v", err)
+	if _, err := os.Stat(filepath.Join(binDir, "ww-helper")); err != nil {
+		t.Fatalf("expected installed ww-helper binary: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(binDir, "ww.sh")); err != nil {
+		t.Fatalf("expected installed ww shell library: %v", err)
 	}
 
 	data, err := os.ReadFile(rcPath)
 	if err != nil {
 		t.Fatalf("read rc file: %v", err)
 	}
-	if !strings.Contains(string(data), "ww()") {
-		t.Fatalf("expected ww shell function, got %q", string(data))
+	if !strings.Contains(string(data), filepath.Join(binDir, "ww.sh")) {
+		t.Fatalf("expected rc to source ww.sh, got %q", string(data))
 	}
-	if !strings.Contains(string(data), filepath.Join(binDir, "ww")) {
-		t.Fatalf("expected ww shell function to call installed binary, got %q", string(data))
+	if !strings.Contains(string(data), filepath.Join(binDir, "ww-helper")) {
+		t.Fatalf("expected rc to point at ww-helper, got %q", string(data))
 	}
 	if !strings.Contains(string(data), "ww shell wrapper begin") {
 		t.Fatalf("expected managed block marker, got %q", string(data))

@@ -16,8 +16,8 @@ usage() {
   cat <<'EOF'
 Usage: bash install.sh [--shell zsh|bash] [--rc-file PATH] [--bin-dir PATH]
 
-Installs the helper binary and appends a managed block that exposes `ww`
-from the chosen shell rc file.
+Installs `ww-helper`, copies `ww.sh`, and appends a managed block that
+sources the shell-first `ww` function from the chosen shell rc file.
 EOF
 }
 
@@ -149,7 +149,8 @@ choose_rc_file() {
 
 append_shell_wrapper() {
   local rc_file="$1"
-  local ww_bin="$2"
+  local ww_helper_bin="$2"
+  local ww_shell_lib="$3"
 
   mkdir -p "$(dirname "$rc_file")"
   touch "$rc_file"
@@ -158,59 +159,46 @@ append_shell_wrapper() {
 
   {
     printf '%s\n' "$RC_MARKER_BEGIN"
-    printf '%s\n' "ww() {"
-    printf '%s\n' "  local ww_bin=\"$ww_bin\""
-    printf '%s\n' "  local target"
-    printf '%s\n' "  target=\"\$(\"\$ww_bin\" \"\$@\")\""
-    printf '%s\n' "  local status=\$?"
-    printf '%s\n' "  if [ \$status -ne 0 ]; then"
-    printf '%s\n' "    [ -n \"\$target\" ] && printf '%s\\n' \"\$target\""
-    printf '%s\n' "    return \$status"
-    printf '%s\n' "  fi"
-    printf '%s\n' "  case \"\$target\" in"
-    printf '%s\n' "    *\$'\\n'*)"
-    printf '%s\n' "      [ -n \"\$target\" ] && printf '%s\\n' \"\$target\""
-    printf '%s\n' "      return 0"
-    printf '%s\n' "      ;;"
-    printf '%s\n' "  esac"
-    printf '%s\n' "  if [ -n \"\$target\" ] && [ -d \"\$target\" ]; then"
-    printf '%s\n' "    cd \"\$target\" || return \$?"
-    printf '%s\n' "    return 0"
-    printf '%s\n' "  fi"
-    printf '%s\n' "  [ -n \"\$target\" ] && printf '%s\\n' \"\$target\""
-    printf '%s\n' "  return 0"
-    printf '%s\n' "}"
+    printf '%s\n' "WW_HELPER_BIN=\"$ww_helper_bin\""
+    printf '%s\n' "source \"$ww_shell_lib\""
     printf '%s\n' "$RC_MARKER_END"
   } >>"$rc_file"
 }
 
-install_binary() {
-  local bin_path="$BIN_DIR/ww"
+install_artifacts() {
+  local helper_path="$BIN_DIR/ww-helper"
+  local shell_path="$BIN_DIR/ww.sh"
 
   mkdir -p "$BIN_DIR"
-  if [ -x "$REPO_ROOT/bin/ww" ]; then
-    cp "$REPO_ROOT/bin/ww" "$bin_path"
-    chmod +x "$bin_path"
+  if [ -x "$REPO_ROOT/bin/ww-helper" ]; then
+    cp "$REPO_ROOT/bin/ww-helper" "$helper_path"
+    chmod +x "$helper_path"
   else
     cd "$REPO_ROOT"
-    go build -o "$bin_path" ./cmd/wt
+    go build -o "$helper_path" ./cmd/ww-helper
   fi
+  cp "$REPO_ROOT/shell/ww.sh" "$shell_path"
+  chmod +x "$shell_path"
   rm -f "$BIN_DIR/wt"
+  rm -f "$BIN_DIR/ww"
 }
 
 parse_args "$@"
-install_binary
+install_artifacts
 RC_TARGET="$(choose_rc_file)"
 clean_managed_blocks <<EOF
 $(collect_rc_files)
 EOF
-append_shell_wrapper "$RC_TARGET" "$BIN_DIR/ww"
+append_shell_wrapper "$RC_TARGET" "$BIN_DIR/ww-helper" "$BIN_DIR/ww.sh"
 
-printf 'Installed helper binary to %s\n' "$BIN_DIR/ww"
+printf 'Installed helper binary to %s\n' "$BIN_DIR/ww-helper"
+printf 'Installed shell library to %s\n' "$BIN_DIR/ww.sh"
 printf 'Installed ww shell function via %s\n' "$RC_TARGET"
 printf 'Updated shell rc: %s\n' "$RC_TARGET"
 printf '\n'
 printf 'Reload your shell first: source %s\n' "$RC_TARGET"
 printf 'Use `ww` to switch the current shell directory.\n'
-printf 'Use `ww --fzf` for fzf selection.\n'
+printf '`ww` uses fzf when available and falls back to the built-in selector.\n'
+printf 'Use `ww list` to print worktrees without changing directory.\n'
+printf 'Use `ww new <name>` to create and enter a new worktree.\n'
 printf '`ww` changes directory in your current shell.\n'

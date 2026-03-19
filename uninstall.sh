@@ -15,8 +15,8 @@ usage() {
   cat <<'EOF'
 Usage: bash uninstall.sh [--shell zsh|bash] [--rc-file PATH] [--bin-dir PATH]
 
-Removes the installed helper binary and deletes the managed shell block that
-exposes `ww`.
+Removes the installed helper binary, shell library, and deletes the managed
+shell block that exposes `ww`.
 EOF
 }
 
@@ -148,11 +148,11 @@ clean_managed_blocks() {
 
 parse_args "$@"
 
-rm -f "$BIN_DIR/ww" "$BIN_DIR/wt"
+rm -f "$BIN_DIR/ww-helper" "$BIN_DIR/ww.sh" "$BIN_DIR/ww" "$BIN_DIR/wt"
 RC_TARGET="$(choose_rc_file)"
 clean_managed_blocks <<EOF
 $(collect_rc_files)
 EOF
 
-printf 'Removed helper binary from %s and %s\n' "$BIN_DIR/ww" "$BIN_DIR/wt"
+printf 'Removed helper artifacts from %s, %s, %s, and %s\n' "$BIN_DIR/ww-helper" "$BIN_DIR/ww.sh" "$BIN_DIR/ww" "$BIN_DIR/wt"
 printf 'Cleaned shell rc: %s\n' "$RC_TARGET"

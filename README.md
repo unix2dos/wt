@@ -1,6 +1,6 @@
 # ww
 
-`ww` is a small Git worktree switcher for the current repository.
+`ww` is a shell-first Git worktree tool for the current repository.
 
 ## Install
 
@@ -39,7 +39,7 @@ source ~/.zshrc
 
 If you use Bash, reload with `source ~/.bashrc` instead.
 
-The installer puts the helper binary into your target bin directory, then appends a managed shell block that exposes `ww`.
+The installer puts `ww-helper` and `ww.sh` into your target bin directory, then appends a managed shell block that exposes `ww`.
 
 Source installs require a working Go toolchain.
 
@@ -52,7 +52,7 @@ bash install.sh
 source ~/.zshrc
 ```
 
-Release bundle installs copy the prebuilt `bin/ww` binary and do not require Go.
+Release bundle installs copy the prebuilt `bin/ww-helper` binary and `ww.sh`, and do not require Go.
 
 ### Installer Options
 
@@ -77,8 +77,10 @@ If you installed into Bash, reload `~/.bashrc` instead.
 
 `ww` is a shell function that switches worktrees and changes your current shell directory.
 
-- `ww` selects a worktree and switches into it.
-- `fzf` is opt-in. Use `ww --fzf` when you want fuzzy search.
+- `ww` or `ww switch` selects a worktree and switches into it.
+- `ww list` prints worktrees without changing directory.
+- `ww new <name>` creates a new worktree under `./.worktrees/<name>` and switches into it.
+- `ww` uses `fzf` automatically when available and falls back to the built-in arrow-key selector otherwise.
 
 ### Interactive Pick
 
@@ -86,63 +88,70 @@ If you installed into Bash, reload `~/.bashrc` instead.
 ww
 ```
 
-This prints a numbered menu like:
+Without `fzf`, this opens the built-in selector like:
 
 ```text
-[1] * main /path/to/repo
-[2]   feat-a /path/to/repo/.worktrees/feat-a
-Select a worktree [number]:
+> [1] * main /path/to/repo
+  [2]   feat-a /path/to/repo/.worktrees/feat-a
+
+Use Up/Down (or j/k). Enter to confirm. Esc/Ctrl-C to cancel.
 ```
 
-Enter a number and `ww` switches your current shell into that worktree.
+Move with arrow keys and press Enter to switch.
 
-### Direct Index
+### Direct Index Or Name
 
 ```bash
 ww 2
+ww switch feat-a
+ww switch fea
 ```
 
-Use this for a direct jump to a known worktree.
+Exact name matches win. If no exact match exists, `ww` falls back to a unique prefix match.
 
-### Fzf Mode
+### List
 
 ```bash
-ww --fzf
+ww list
 ```
 
-This opens `fzf`, searches by the non-index columns, and switches into the selected worktree.
+This prints the current, MRU-sorted worktree table without changing your shell directory.
 
-### Switch Current Shell
+### New
 
 ```bash
-ww
-ww 2
-ww --fzf
+ww new feat-a
 ```
+
+This creates branch `feat-a` from the current `HEAD` in `./.worktrees/feat-a`, then switches into it.
 
 ### Typical Flow
 
 ```bash
 cd /path/to/repo
-git worktree list
 ww
+ww switch feat-a
+ww list
+ww new feat-b
 ```
 
-`ww` and `ww 2` both switch the current shell into the selected worktree.
+`ww`, `ww 2`, and `ww switch feat-a` all switch the current shell into the target worktree.
 
 ### Exit Behavior
 
 - `0`: success
-- `2`: invalid user input such as a bad index or extra args
-- `3`: environment problem such as not being in a Git repo or missing `fzf`
-- `130`: `fzf` selection canceled
+- `2`: invalid user input such as a bad index, bad name match, or extra args
+- `3`: environment problem such as not being in a Git repo
+- `130`: interactive selection canceled
 
 ## Smoke Test Matrix
 
 ```bash
 ww --help
 ww 1
-ww --fzf
+ww switch feat-a
+ww list
+ww new feat-b
 ```
 
 Installer checks:

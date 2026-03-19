@@ -54,7 +54,7 @@ func RenderTUI(w io.Writer, items []worktree.Worktree, active int) {
 		fmt.Fprintln(w, formatTUIRow(item, i == active))
 	}
 	fmt.Fprintln(w)
-	fmt.Fprint(w, "Use \u2191/\u2193 (or j/k). Enter to confirm. Esc/Ctrl-C to cancel.")
+	fmt.Fprint(w, "Use Up/Down (or j/k). Enter to confirm. Esc/Ctrl-C to cancel.")
 }
 
 func SelectWorktreeWithTUI(in io.Reader, out io.Writer, items []worktree.Worktree, raw RawMode) (worktree.Worktree, error) {
