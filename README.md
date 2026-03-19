@@ -1,6 +1,6 @@
-# wt
+# ww
 
-`wt` is a small Git worktree switcher for the current repository.
+`ww` is a small Git worktree switcher for the current repository.
 
 ## Install
 
@@ -39,15 +39,15 @@ source ~/.zshrc
 
 If you use Bash, reload with `source ~/.bashrc` instead.
 
-The installer puts `wt` and the `wt-cwt.sh` shell wrapper into your target bin directory, then appends a managed shell block that sources the installed wrapper.
+The installer puts the helper binary into your target bin directory, then appends a managed shell block that exposes `ww`.
 
 Source installs require a working Go toolchain.
 
 ### Install From A Release Bundle
 
 ```bash
-tar -xzf wt-vX.Y.Z-darwin-arm64.tar.gz
-cd wt-vX.Y.Z-darwin-arm64
+tar -xzf ww-vX.Y.Z-darwin-arm64.tar.gz
+cd ww-vX.Y.Z-darwin-arm64
 bash install.sh
 source ~/.zshrc
 ```
@@ -73,18 +73,17 @@ If you installed into Bash, reload `~/.bashrc` instead.
 
 ## Usage
 
-`wt` only works for the current repository. Run it inside a Git repository or one of that repository's worktrees.
+`ww` only works for the current repository. Run it inside a Git repository or one of that repository's worktrees.
 
-`wt` and `cwt` are intentionally different:
+`ww` is a shell function that switches worktrees and changes your current shell directory.
 
-- `wt` selects a worktree and prints its path. It does not change your current shell directory.
-- `cwt` calls `wt`, reads the path, and runs `cd` in your current shell.
-- `fzf` is opt-in. Use `wt --fzf` or `cwt --fzf` when you want fuzzy search.
+- `ww` selects a worktree and switches into it.
+- `fzf` is opt-in. Use `ww --fzf` when you want fuzzy search.
 
 ### Interactive Pick
 
 ```bash
-wt
+ww
 ```
 
 This prints a numbered menu like:
@@ -95,29 +94,24 @@ This prints a numbered menu like:
 Select a worktree [number]:
 ```
 
-Enter a number and `wt` prints only the selected path to `stdout`.
-
-If you want to actually jump into that worktree in your current shell, use `cwt` instead.
+Enter a number and `ww` switches your current shell into that worktree.
 
 ### Direct Index
 
 ```bash
-wt 2
+ww 2
 ```
 
 Useful for scripting:
 
 ```bash
-target="$(wt 2)"
-cd "$target"
+ww 2
 ```
-
-If you want that `cd` to happen automatically in your current shell, run `cwt 2`.
 
 ### Fzf Mode
 
 ```bash
-wt --fzf
+ww --fzf
 ```
 
 This opens `fzf`, searches by the non-index columns, and prints the selected path.
@@ -125,20 +119,17 @@ This opens `fzf`, searches by the non-index columns, and prints the selected pat
 ### Switch Current Shell
 
 ```bash
-cwt
-cwt 2
-cwt --fzf
+ww
+ww 2
+ww --fzf
 ```
-
-`cwt` is the shell wrapper. It calls `wt`, reads the returned path, and runs `cd` in your current shell session.
 
 ### Typical Flow
 
 ```bash
 cd /path/to/repo
 git worktree list
-wt
-cwt --fzf
+ww
 ```
 
 ### Exit Behavior
@@ -151,11 +142,9 @@ cwt --fzf
 ## Smoke Test Matrix
 
 ```bash
-wt --help
-wt 1
-printf '2\n' | wt
-wt --fzf
-cwt 1
+ww --help
+ww 1
+ww --fzf
 ```
 
 Installer checks:
@@ -175,10 +164,10 @@ bash scripts/release.sh vX.Y.Z
 
 Artifacts are written to `dist/`:
 
-- `wt-vX.Y.Z-darwin-arm64.tar.gz`
-- `wt-vX.Y.Z-darwin-amd64.tar.gz`
-- `wt-vX.Y.Z-linux-arm64.tar.gz`
-- `wt-vX.Y.Z-linux-amd64.tar.gz`
+- `ww-vX.Y.Z-darwin-arm64.tar.gz`
+- `ww-vX.Y.Z-darwin-amd64.tar.gz`
+- `ww-vX.Y.Z-linux-arm64.tar.gz`
+- `ww-vX.Y.Z-linux-amd64.tar.gz`
 - `checksums.txt`
 - `install-release.sh`
 

@@ -58,7 +58,7 @@ download_url() {
   local version="$1"
   local os="$2"
   local arch="$3"
-  printf 'https://github.com/%s/releases/download/%s/wt-%s-%s-%s.tar.gz\n' "$REPO" "$version" "$version" "$os" "$arch"
+  printf 'https://github.com/%s/releases/download/%s/ww-%s-%s-%s.tar.gz\n' "$REPO" "$version" "$version" "$os" "$arch"
 }
 
 main() {

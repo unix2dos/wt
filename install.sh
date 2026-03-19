@@ -5,9 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$SCRIPT_DIR"
 WRAPPER_SOURCE_PATH="$REPO_ROOT/shell/cwt.sh"
-WRAPPER_NAME="wt-cwt.sh"
-RC_MARKER_BEGIN="# wt shell wrapper begin"
-RC_MARKER_END="# wt shell wrapper end"
+RC_MARKER_BEGIN="# ww shell wrapper begin"
+RC_MARKER_END="# ww shell wrapper end"
 INSTALL_SHELL=""
 RC_FILE=""
 BIN_DIR="$HOME/.local/bin"
@@ -16,13 +15,9 @@ usage() {
   cat <<'EOF'
 Usage: bash install.sh [--shell zsh|bash] [--rc-file PATH] [--bin-dir PATH]
 
-Installs `wt` to the target bin directory and appends a managed block that
-sources the installed `wt-cwt.sh` wrapper from the chosen shell rc file.
+Installs the helper binary and appends a managed block that exposes `ww`
+from the chosen shell rc file.
 EOF
-}
-
-installed_wrapper_path() {
-  printf '%s\n' "$BIN_DIR/$WRAPPER_NAME"
 }
 
 strip_managed_block() {
@@ -117,7 +112,6 @@ choose_rc_file() {
 
 append_shell_wrapper() {
   local rc_file="$1"
-  local wrapper_path="$2"
 
   mkdir -p "$(dirname "$rc_file")"
   touch "$rc_file"
@@ -125,9 +119,15 @@ append_shell_wrapper() {
 
   {
     printf '%s\n' "$RC_MARKER_BEGIN"
-    printf '%s\n' "if [ -f \"$wrapper_path\" ]; then"
-    printf '%s\n' "  source \"$wrapper_path\""
+    printf '%s\n' "if [ -f \"$WRAPPER_SOURCE_PATH\" ]; then"
+    printf '%s\n' "  source \"$WRAPPER_SOURCE_PATH\""
     printf '%s\n' "fi"
+    printf '%s\n' "ww() {"
+    printf '%s\n' "  local target"
+    printf '%s\n' "  target=\"\$(cwt \"\$@\")\" || return \$?"
+    printf '%s\n' "  [ -n \"\$target\" ] || return 1"
+    printf '%s\n' "  cd \"\$target\" || return \$?"
+    printf '%s\n' "}"
     printf '%s\n' "$RC_MARKER_END"
   } >>"$rc_file"
 }
@@ -147,12 +147,7 @@ install_binary() {
 }
 
 install_wrapper() {
-  local wrapper_path
-
-  wrapper_path="$(installed_wrapper_path)"
-  mkdir -p "$BIN_DIR"
-  cp "$WRAPPER_SOURCE_PATH" "$wrapper_path"
-  chmod +x "$wrapper_path"
+  return 0
 }
 
 parse_args "$@"
@@ -160,13 +155,13 @@ install_binary
 install_wrapper
 
 RC_TARGET="$(choose_rc_file)"
-append_shell_wrapper "$RC_TARGET" "$(installed_wrapper_path)"
+append_shell_wrapper "$RC_TARGET"
 
-printf 'Installed wt to %s\n' "$BIN_DIR/wt"
-printf 'Installed shell wrapper to %s\n' "$(installed_wrapper_path)"
+printf 'Installed helper binary to %s\n' "$BIN_DIR/wt"
+printf 'Installed ww shell function via %s\n' "$RC_TARGET"
 printf 'Updated shell rc: %s\n' "$RC_TARGET"
 printf '\n'
 printf 'Reload your shell first: source %s\n' "$RC_TARGET"
-printf 'Use `cwt` to switch the current shell directory.\n'
-printf 'Use `wt --fzf` or `cwt --fzf` for fzf selection.\n'
-printf '`wt` only prints the selected path; it does not cd.\n'
+printf 'Use `ww` to switch the current shell directory.\n'
+printf 'Use `ww --fzf` for fzf selection.\n'
+printf '`ww` changes directory in your current shell.\n'

@@ -20,14 +20,14 @@ EOF
 VERSION="$1"
 
 mkdir -p "$OUT_DIR"
-rm -f "$OUT_DIR"/wt-"$VERSION"-*.tar.gz "$OUT_DIR"/checksums.txt "$OUT_DIR"/install-release.sh
+rm -f "$OUT_DIR"/ww-"$VERSION"-*.tar.gz "$OUT_DIR"/checksums.txt "$OUT_DIR"/install-release.sh
 
 cd "$REPO_ROOT"
 
 for target in $TARGETS; do
   GOOS="${target%/*}"
   GOARCH="${target#*/}"
-  ARTIFACT_DIR="wt-${VERSION}-${GOOS}-${GOARCH}"
+  ARTIFACT_DIR="ww-${VERSION}-${GOOS}-${GOARCH}"
   ARCHIVE_PATH="$OUT_DIR/${ARTIFACT_DIR}.tar.gz"
   STAGE_ROOT="$(mktemp -d)"
   STAGE_DIR="$STAGE_ROOT/$ARTIFACT_DIR"
@@ -51,12 +51,12 @@ chmod +x "$OUT_DIR/install-release.sh"
 if command -v sha256sum >/dev/null 2>&1; then
   (
     cd "$OUT_DIR"
-    sha256sum wt-"$VERSION"-*.tar.gz > checksums.txt
+    sha256sum ww-"$VERSION"-*.tar.gz > checksums.txt
   )
 elif command -v shasum >/dev/null 2>&1; then
   (
     cd "$OUT_DIR"
-    shasum -a 256 wt-"$VERSION"-*.tar.gz > checksums.txt
+    shasum -a 256 ww-"$VERSION"-*.tar.gz > checksums.txt
   )
 fi
 

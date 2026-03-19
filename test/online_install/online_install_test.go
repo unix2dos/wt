@@ -28,7 +28,7 @@ func TestInstallReleaseScriptInstallsFromTarballURL(t *testing.T) {
 		"WT_RELEASE_TARGETS="+goos+"/"+goarch,
 	), "bash", "scripts/release.sh", "v9.9.9-test")
 
-	tarball := filepath.Join(outDir, "wt-v9.9.9-test-"+goos+"-"+goarch+".tar.gz")
+	tarball := filepath.Join(outDir, "ww-v9.9.9-test-"+goos+"-"+goarch+".tar.gz")
 	if _, err := os.Stat(tarball); err != nil {
 		t.Fatalf("expected tarball %s: %v", tarball, err)
 	}
@@ -46,12 +46,11 @@ func TestInstallReleaseScriptInstallsFromTarballURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read rc file: %v", err)
 	}
-	wrapperPath := filepath.Join(binDir, "wt-cwt.sh")
-	if !strings.Contains(string(data), "source \""+wrapperPath+"\"") {
-		t.Fatalf("expected shell wrapper block, got %q", string(data))
+	if !strings.Contains(string(data), "ww()") {
+		t.Fatalf("expected ww shell function, got %q", string(data))
 	}
-	if _, err := os.Stat(wrapperPath); err != nil {
-		t.Fatalf("expected installed wrapper: %v", err)
+	if !strings.Contains(string(data), "ww shell wrapper begin") {
+		t.Fatalf("expected managed block marker, got %q", string(data))
 	}
 }
 
