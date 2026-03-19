@@ -73,6 +73,82 @@ func TestRunSwitchPathPrintsSelectedPath(t *testing.T) {
 	}
 }
 
+func TestRunSwitchPathMatchesNameAndPrintsSelectedPath(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		repoKey: "/repo/.git",
+		touched: &touchRecord{},
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha"},
+			{Path: "/repo/.worktrees/beta", BranchLabel: "beta"},
+		},
+	}
+
+	code := Run(context.Background(), []string{"switch-path", "alpha"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if stdout.String() != "/repo/.worktrees/alpha\n" {
+		t.Fatalf("expected selected path on stdout, got %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+	if deps.touched.repoKey != "/repo/.git" || deps.touched.path != "/repo/.worktrees/alpha" {
+		t.Fatalf("expected state touch after successful named switch, got %#v", deps.touched)
+	}
+}
+
+func TestRunSwitchPathRejectsAmbiguousName(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		repoKey: "/repo/.git",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha"},
+			{Path: "/repo/.worktrees/alpine", BranchLabel: "alpine"},
+		},
+	}
+
+	code := Run(context.Background(), []string{"switch-path", "alp"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 2 {
+		t.Fatalf("expected exit code 2, got %d", code)
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte("ambiguous worktree match")) {
+		t.Fatalf("expected ambiguous-match message, got %q", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout output, got %q", stdout.String())
+	}
+}
+
+func TestRunSwitchPathRejectsUnknownName(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		repoKey: "/repo/.git",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha"},
+		},
+	}
+
+	code := Run(context.Background(), []string{"switch-path", "gamma"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 2 {
+		t.Fatalf("expected exit code 2, got %d", code)
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte(`no worktree matches "gamma"`)) {
+		t.Fatalf("expected no-match message, got %q", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout output, got %q", stdout.String())
+	}
+}
+
 func TestRunListPrintsMenuWithoutPrompt(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -335,7 +411,7 @@ func TestRunRejectsInvalidIndex(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	code := Run(context.Background(), []string{"switch-path", "abc"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
+	code := Run(context.Background(), []string{"switch-path", "0"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
 
 	if code != 2 {
 		t.Fatalf("expected exit code 2, got %d", code)

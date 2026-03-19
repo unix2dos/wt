@@ -35,6 +35,30 @@ func TestCLISelectsSecondWorktreePath(t *testing.T) {
 	}
 }
 
+func TestCLISelectsWorktreePathByName(t *testing.T) {
+	repo := newTestRepo(t)
+	alpha := repo.AddWorktree(t, "alpha")
+	bin := buildCLI(t)
+
+	cmd := exec.CommandContext(context.Background(), bin, "switch-path", "alpha")
+	cmd.Dir = repo.Root
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if got := strings.TrimSpace(stdout.String()); got != alpha {
+		t.Fatalf("expected named worktree path %q, got %q", alpha, got)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
 func TestCLIListsWorktrees(t *testing.T) {
 	repo := newTestRepo(t)
 	repo.AddWorktree(t, "alpha")

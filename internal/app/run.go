@@ -158,20 +158,32 @@ func runSwitchPath(ctx context.Context, args []string, in io.Reader, out io.Writ
 		return 2
 	}
 
-	index, err := strconv.Atoi(args[0])
-	if err != nil || index <= 0 {
-		fmt.Fprintf(errOut, "invalid worktree index: %q\n", args[0])
-		return 2
-	}
-
 	repoKey, items, warn, err := orderedWorktrees(ctx, deps)
 	if err != nil {
 		return writeWorktreeError(errOut, err)
 	}
 	warnStateIssue(errOut, warn)
-	selected, ok := selectByIndex(items, index)
-	if !ok {
-		fmt.Fprintf(errOut, "worktree index %d out of range\n", index)
+
+	index, err := strconv.Atoi(args[0])
+	if err == nil {
+		if index <= 0 {
+			fmt.Fprintf(errOut, "invalid worktree index: %q\n", args[0])
+			return 2
+		}
+		selected, ok := selectByIndex(items, index)
+		if !ok {
+			fmt.Fprintf(errOut, "worktree index %d out of range\n", index)
+			return 2
+		}
+
+		fmt.Fprintln(out, selected.Path)
+		warnStateIssue(errOut, touchWorktreeStateBestEffort(ctx, deps, repoKey, selected.Path))
+		return 0
+	}
+
+	selected, err := worktree.Match(items, args[0])
+	if err != nil {
+		fmt.Fprintln(errOut, err)
 		return 2
 	}
 
