@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +16,7 @@ import (
 )
 
 type Deps interface {
+	CurrentRepoKey(ctx context.Context) (string, error)
 	ListWorktrees(ctx context.Context) (string, []worktree.Worktree, error)
 	SelectWorktreeWithFzf(ctx context.Context, items []worktree.Worktree) (worktree.Worktree, error)
 	CreateWorktree(ctx context.Context, name string) (string, error)
@@ -41,6 +41,10 @@ func ensureStore() (*state.Store, error) {
 
 func (d RealDeps) ListWorktrees(ctx context.Context) (string, []worktree.Worktree, error) {
 	return git.ListWorktrees(ctx, git.ExecRunner{})
+}
+
+func (d RealDeps) CurrentRepoKey(ctx context.Context) (string, error) {
+	return git.CurrentRepoKey(ctx, git.ExecRunner{})
 }
 
 func (d RealDeps) SelectWorktreeWithFzf(ctx context.Context, items []worktree.Worktree) (worktree.Worktree, error) {
@@ -207,13 +211,18 @@ func runNewPath(ctx context.Context, args []string, out io.Writer, errOut io.Wri
 		return 2
 	}
 
+	repoKey, err := deps.CurrentRepoKey(ctx)
+	if err != nil {
+		return writeWorktreeError(errOut, err)
+	}
+
 	path, err := deps.CreateWorktree(ctx, args[0])
 	if err != nil {
 		return writeWorktreeError(errOut, err)
 	}
 
 	fmt.Fprintln(out, path)
-	warnStateIssue(errOut, touchWorktreeStateBestEffort(ctx, deps, repoKeyFromWorktreePath(path), path))
+	warnStateIssue(errOut, touchWorktreeStateBestEffort(ctx, deps, repoKey, path))
 	return 0
 }
 
@@ -263,10 +272,6 @@ func warnStateIssue(errOut io.Writer, err error) {
 		return
 	}
 	fmt.Fprintln(errOut, err)
-}
-
-func repoKeyFromWorktreePath(path string) string {
-	return filepath.Join(filepath.Dir(filepath.Dir(path)), ".git")
 }
 
 func printHelperHelp(out io.Writer) {

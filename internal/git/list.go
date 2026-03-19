@@ -30,21 +30,9 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte,
 }
 
 func ListWorktrees(ctx context.Context, runner Runner) (string, []worktree.Worktree, error) {
-	rootOut, rootErr, err := runner.Run(ctx, "git", "rev-parse", "--show-toplevel")
+	currentPath, repoKey, err := currentRepoContext(ctx, runner)
 	if err != nil {
-		if isNotGitRepository(err, rootOut, rootErr) {
-			return "", nil, ErrNotGitRepository
-		}
-		return "", nil, fmt.Errorf("git rev-parse --show-toplevel: %w", err)
-	}
-
-	currentPath := strings.TrimSpace(string(rootOut))
-	commonDirOut, commonDirErr, err := runner.Run(ctx, "git", "-C", currentPath, "rev-parse", "--git-common-dir")
-	if err != nil {
-		if isNotGitRepository(err, commonDirOut, commonDirErr) {
-			return "", nil, ErrNotGitRepository
-		}
-		return "", nil, fmt.Errorf("git rev-parse --git-common-dir: %w", err)
+		return "", nil, err
 	}
 
 	worktreeOut, worktreeErr, err := runner.Run(ctx, "git", "-C", currentPath, "worktree", "list", "--porcelain", "-z")
@@ -64,7 +52,36 @@ func ListWorktrees(ctx context.Context, runner Runner) (string, []worktree.Workt
 		items[i].IsCurrent = filepath.Clean(items[i].Path) == filepath.Clean(currentPath)
 	}
 
-	return cleanPath(currentPath, commonDirOut), items, nil
+	return repoKey, items, nil
+}
+
+func CurrentRepoKey(ctx context.Context, runner Runner) (string, error) {
+	_, repoKey, err := currentRepoContext(ctx, runner)
+	if err != nil {
+		return "", err
+	}
+	return repoKey, nil
+}
+
+func currentRepoContext(ctx context.Context, runner Runner) (string, string, error) {
+	rootOut, rootErr, err := runner.Run(ctx, "git", "rev-parse", "--show-toplevel")
+	if err != nil {
+		if isNotGitRepository(err, rootOut, rootErr) {
+			return "", "", ErrNotGitRepository
+		}
+		return "", "", fmt.Errorf("git rev-parse --show-toplevel: %w", err)
+	}
+
+	currentPath := strings.TrimSpace(string(rootOut))
+	commonDirOut, commonDirErr, err := runner.Run(ctx, "git", "-C", currentPath, "rev-parse", "--git-common-dir")
+	if err != nil {
+		if isNotGitRepository(err, commonDirOut, commonDirErr) {
+			return "", "", ErrNotGitRepository
+		}
+		return "", "", fmt.Errorf("git rev-parse --git-common-dir: %w", err)
+	}
+
+	return currentPath, cleanPath(currentPath, commonDirOut), nil
 }
 
 func isNotGitRepository(err error, stdout []byte, stderr []byte) bool {

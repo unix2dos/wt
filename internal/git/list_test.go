@@ -94,6 +94,39 @@ func TestListWorktreesIgnoresStderrOnSuccess(t *testing.T) {
 	}
 }
 
+func TestCurrentRepoKeyReturnsCanonicalGitCommonDir(t *testing.T) {
+	runner := fakeRunner{
+		outputs: map[string]string{
+			key("git", "rev-parse", "--show-toplevel"):                                    "/repo/.worktrees/current\n",
+			key("git", "-C", "/repo/.worktrees/current", "rev-parse", "--git-common-dir"): "/repo/.git\n",
+		},
+	}
+
+	repoKey, err := CurrentRepoKey(context.Background(), runner)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if repoKey != "/repo/.git" {
+		t.Fatalf("expected repo key /repo/.git, got %q", repoKey)
+	}
+}
+
+func TestCurrentRepoKeyMapsNonRepoError(t *testing.T) {
+	runner := fakeRunner{
+		errors: map[string]error{
+			key("git", "rev-parse", "--show-toplevel"): errCommand("exit status 128"),
+		},
+		stderr: map[string]string{
+			key("git", "rev-parse", "--show-toplevel"): "fatal: not a git repository (or any of the parent directories): .git\n",
+		},
+	}
+
+	_, err := CurrentRepoKey(context.Background(), runner)
+	if !errors.Is(err, ErrNotGitRepository) {
+		t.Fatalf("expected ErrNotGitRepository, got %v", err)
+	}
+}
+
 type fakeRunner struct {
 	outputs map[string]string
 	stderr  map[string]string

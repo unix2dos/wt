@@ -136,6 +136,50 @@ func TestRunNewPathPrintsSelectedPath(t *testing.T) {
 	}
 }
 
+func TestRunNewPathUsesCanonicalRepoKeyForStateTouch(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		repoKey:    "/repo/.git",
+		createPath: "/repo/.worktrees/current/.worktrees/alpha",
+		touched:    &touchRecord{},
+	}
+
+	code := Run(context.Background(), []string{"new-path", "alpha"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if deps.touched.repoKey != "/repo/.git" {
+		t.Fatalf("expected canonical repo key /repo/.git, got %#v", deps.touched)
+	}
+	if deps.touched.path != "/repo/.worktrees/current/.worktrees/alpha" {
+		t.Fatalf("expected created path to be touched, got %#v", deps.touched)
+	}
+}
+
+func TestRunNewPathUsesCanonicalRepoKeyWhenCreatedPathUsesAlias(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		repoKey:    "/real/repo/.git",
+		createPath: "/alias/repo/.worktrees/alpha",
+		touched:    &touchRecord{},
+	}
+
+	code := Run(context.Background(), []string{"new-path", "alpha"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if deps.touched.repoKey != "/real/repo/.git" {
+		t.Fatalf("expected canonical repo key /real/repo/.git, got %#v", deps.touched)
+	}
+	if deps.touched.path != "/alias/repo/.worktrees/alpha" {
+		t.Fatalf("expected created path to be touched, got %#v", deps.touched)
+	}
+}
+
 func TestRunSwitchPathContinuesWhenStateLoadFails(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -223,6 +267,26 @@ func TestRunNewPathRejectsMissingName(t *testing.T) {
 	}
 	if !bytes.Contains(stderr.Bytes(), []byte("missing worktree name")) {
 		t.Fatalf("expected missing-name message, got %q", stderr.String())
+	}
+}
+
+func TestRunNewPathReturnsNonRepoWhenRepoKeyLookupFails(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := Run(context.Background(), []string{"new-path", "alpha"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{
+		repoKeyErr: git.ErrNotGitRepository,
+		createPath: "/repo/.worktrees/alpha",
+	})
+
+	if code != 3 {
+		t.Fatalf("expected exit code 3, got %d", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout output, got %q", stdout.String())
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte("not a git repository")) {
+		t.Fatalf("expected non-repo message, got %q", stderr.String())
 	}
 }
 
@@ -457,6 +521,7 @@ func TestRunSwitchPathInteractiveSelectionReturnsNonZeroOnEOFWithoutSelection(t 
 
 type fakeDeps struct {
 	repoKey     string
+	repoKeyErr  error
 	worktrees   []worktree.Worktree
 	err         error
 	fzfSelected worktree.Worktree
@@ -472,6 +537,13 @@ type fakeDeps struct {
 type touchRecord struct {
 	repoKey string
 	path    string
+}
+
+func (f fakeDeps) CurrentRepoKey(context.Context) (string, error) {
+	if f.repoKeyErr != nil {
+		return "", f.repoKeyErr
+	}
+	return f.repoKey, nil
 }
 
 func (f fakeDeps) ListWorktrees(context.Context) (string, []worktree.Worktree, error) {
