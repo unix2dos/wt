@@ -17,8 +17,15 @@ func TestInstallIsIdempotentAndBuildsBinary(t *testing.T) {
 		t.Fatalf("write rc file: %v", err)
 	}
 
+	firstInstall := runInstall(t, home)
 	runInstall(t, home)
-	runInstall(t, home)
+
+	if !strings.Contains(firstInstall, "Use `cwt` to switch") {
+		t.Fatalf("expected install output to mention cwt, got %q", firstInstall)
+	}
+	if !strings.Contains(firstInstall, "Use `wt --fzf`") {
+		t.Fatalf("expected install output to mention wt --fzf, got %q", firstInstall)
+	}
 
 	data, err := os.ReadFile(rcPath)
 	if err != nil {
@@ -163,7 +170,7 @@ func TestCwtLeavesDirectoryOnEmptyOutput(t *testing.T) {
 	}
 }
 
-func runInstall(t *testing.T, home string, args ...string) {
+func runInstall(t *testing.T, home string, args ...string) string {
 	t.Helper()
 
 	cmdArgs := append([]string{"install.sh"}, args...)
@@ -175,9 +182,10 @@ func runInstall(t *testing.T, home string, args ...string) {
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
-		return
+		return string(out)
 	}
 	t.Fatalf("install failed: %v\n%s", err, out)
+	return ""
 }
 
 func runUninstall(t *testing.T, home string, args ...string) {

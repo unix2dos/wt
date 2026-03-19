@@ -23,6 +23,12 @@ func TestRunHelpPrintsUsageAndExitsZero(t *testing.T) {
 	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("wt [--fzf] [index]")) {
 		t.Fatalf("expected usage to mention wt [--fzf] [index], got %q", got)
 	}
+	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("Use `cwt`")) {
+		t.Fatalf("expected help to mention cwt, got %q", got)
+	}
+	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("--fzf")) {
+		t.Fatalf("expected help to mention --fzf mode, got %q", got)
+	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
 	}

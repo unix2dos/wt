@@ -165,3 +165,8 @@ append_shell_wrapper "$RC_TARGET" "$(installed_wrapper_path)"
 printf 'Installed wt to %s\n' "$BIN_DIR/wt"
 printf 'Installed shell wrapper to %s\n' "$(installed_wrapper_path)"
 printf 'Updated shell rc: %s\n' "$RC_TARGET"
+printf '\n'
+printf 'Reload your shell first: source %s\n' "$RC_TARGET"
+printf 'Use `cwt` to switch the current shell directory.\n'
+printf 'Use `wt --fzf` or `cwt --fzf` for fzf selection.\n'
+printf '`wt` only prints the selected path; it does not cd.\n'

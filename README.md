@@ -75,6 +75,12 @@ If you installed into Bash, reload `~/.bashrc` instead.
 
 `wt` only works for the current repository. Run it inside a Git repository or one of that repository's worktrees.
 
+`wt` and `cwt` are intentionally different:
+
+- `wt` selects a worktree and prints its path. It does not change your current shell directory.
+- `cwt` calls `wt`, reads the path, and runs `cd` in your current shell.
+- `fzf` is opt-in. Use `wt --fzf` or `cwt --fzf` when you want fuzzy search.
+
 ### Interactive Pick
 
 ```bash
@@ -91,6 +97,8 @@ Select a worktree [number]:
 
 Enter a number and `wt` prints only the selected path to `stdout`.
 
+If you want to actually jump into that worktree in your current shell, use `cwt` instead.
+
 ### Direct Index
 
 ```bash
@@ -103,6 +111,8 @@ Useful for scripting:
 target="$(wt 2)"
 cd "$target"
 ```
+
+If you want that `cd` to happen automatically in your current shell, run `cwt 2`.
 
 ### Fzf Mode
 

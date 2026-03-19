@@ -36,7 +36,9 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut
 	if len(args) > 0 && args[0] == "--help" {
 		fmt.Fprintln(out, "Usage: wt [--fzf] [index]")
 		fmt.Fprintln(out, "")
-		fmt.Fprintln(out, "Print the selected git worktree path.")
+		fmt.Fprintln(out, "wt prints the selected git worktree path.")
+		fmt.Fprintln(out, "Use `cwt` to switch the current shell directory.")
+		fmt.Fprintln(out, "Use `wt --fzf` or `cwt --fzf` for fzf selection.")
 		return 0
 	}
 
