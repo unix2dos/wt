@@ -1,4 +1,4 @@
-module wt
+module ww
 
 go 1.24.0
 

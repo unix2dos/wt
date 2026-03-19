@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"wt/internal/worktree"
+	"ww/internal/worktree"
 )
 
 var ErrNotGitRepository = errors.New("not a git repository")

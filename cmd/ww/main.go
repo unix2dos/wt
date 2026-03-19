@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"wt/internal/app"
+	"ww/internal/app"
 )
 
 func main() {

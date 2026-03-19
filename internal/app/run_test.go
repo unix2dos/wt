@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"wt/internal/git"
-	"wt/internal/ui"
-	"wt/internal/worktree"
+	"ww/internal/git"
+	"ww/internal/ui"
+	"ww/internal/worktree"
 )
 
 func TestRunHelperHelpPrintsUsageAndExitsZero(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"wt/internal/worktree"
+	"ww/internal/worktree"
 )
 
 func RenderMenu(w io.Writer, items []worktree.Worktree) {

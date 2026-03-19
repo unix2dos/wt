@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"wt/internal/git"
-	"wt/internal/state"
-	"wt/internal/ui"
-	"wt/internal/worktree"
+	"ww/internal/git"
+	"ww/internal/state"
+	"ww/internal/ui"
+	"ww/internal/worktree"
 )
 
 type Deps interface {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"wt/internal/worktree"
+	"ww/internal/worktree"
 )
 
 func TestRenderMenuIncludesIndexBranchPathAndCurrentMarker(t *testing.T) {

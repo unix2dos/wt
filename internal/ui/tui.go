@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/term"
 
-	"wt/internal/worktree"
+	"ww/internal/worktree"
 )
 
 type RawMode interface {

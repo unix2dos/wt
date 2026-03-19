@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"wt/internal/worktree"
+	"ww/internal/worktree"
 )
 
 var ErrFzfNotInstalled = errors.New("fzf not installed")

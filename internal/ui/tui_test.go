@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"wt/internal/worktree"
+	"ww/internal/worktree"
 )
 
 func TestRenderTUIShowsCurrentMarkerAndActiveRow(t *testing.T) {
