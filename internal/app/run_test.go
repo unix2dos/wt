@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"wt/internal/git"
@@ -118,6 +119,52 @@ func TestRunRejectsOutOfRangeIndex(t *testing.T) {
 	}
 	if !bytes.Contains(stderr.Bytes(), []byte("out of range")) {
 		t.Fatalf("expected out-of-range message, got %q", stderr.String())
+	}
+}
+
+func TestRunInteractiveSelectionWritesMenuToStderrAndPathToStdout(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		worktrees: []worktree.Worktree{
+			{Index: 1, Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Index: 2, Path: "/repo/.worktrees/alpha", BranchLabel: "alpha"},
+		},
+	}
+
+	code := Run(context.Background(), nil, strings.NewReader("2\n"), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if stdout.String() != "/repo/.worktrees/alpha\n" {
+		t.Fatalf("expected selected path on stdout, got %q", stdout.String())
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte("[1] * main /repo")) {
+		t.Fatalf("expected menu on stderr, got %q", stderr.String())
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte("Select a worktree")) {
+		t.Fatalf("expected prompt on stderr, got %q", stderr.String())
+	}
+}
+
+func TestRunInteractiveSelectionReturnsNonZeroOnEOFWithoutSelection(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		worktrees: []worktree.Worktree{
+			{Index: 1, Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Index: 2, Path: "/repo/.worktrees/alpha", BranchLabel: "alpha"},
+		},
+	}
+
+	code := Run(context.Background(), nil, strings.NewReader(""), stdout, stderr, deps)
+
+	if code == 0 {
+		t.Fatal("expected non-zero exit code")
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout output, got %q", stdout.String())
 	}
 }
 

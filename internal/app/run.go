@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"wt/internal/git"
+	"wt/internal/ui"
 	"wt/internal/worktree"
 )
 
@@ -23,7 +24,6 @@ func (RealDeps) ListWorktrees(ctx context.Context) ([]worktree.Worktree, error) 
 }
 
 func Run(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut io.Writer, deps Deps) int {
-	_ = in
 	if deps == nil {
 		deps = RealDeps{}
 	}
@@ -35,7 +35,41 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut
 		return 0
 	}
 
-	if len(args) == 0 || args[0] == "--fzf" {
+	if len(args) == 0 {
+		items, err := deps.ListWorktrees(ctx)
+		if err != nil {
+			if errors.Is(err, git.ErrNotGitRepository) {
+				fmt.Fprintln(errOut, "not a git repository")
+				return 3
+			}
+			fmt.Fprintln(errOut, err)
+			return 1
+		}
+		if len(items) == 0 {
+			fmt.Fprintln(errOut, "no worktrees available")
+			return 1
+		}
+
+		ui.RenderMenu(errOut, items)
+		index, err := ui.ReadSelection(in, errOut, len(items))
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return 1
+			}
+			fmt.Fprintln(errOut, err)
+			return 1
+		}
+		for i := range items {
+			if items[i].Index == index {
+				fmt.Fprintln(out, items[i].Path)
+				return 0
+			}
+		}
+		fmt.Fprintf(errOut, "worktree index %d out of range\n", index)
+		return 2
+	}
+
+	if len(args) > 0 && args[0] == "--fzf" {
 		fmt.Fprintln(errOut, "interactive selection not implemented")
 		return 1
 	}
