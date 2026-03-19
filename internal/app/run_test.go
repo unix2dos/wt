@@ -11,7 +11,7 @@ import (
 	"wt/internal/worktree"
 )
 
-func TestRunHelpPrintsUsageAndExitsZero(t *testing.T) {
+func TestRunHelperHelpPrintsUsageAndExitsZero(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
@@ -20,21 +20,21 @@ func TestRunHelpPrintsUsageAndExitsZero(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
-	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("wt [--fzf] [index]")) {
-		t.Fatalf("expected usage to mention wt [--fzf] [index], got %q", got)
+	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("ww-helper")) {
+		t.Fatalf("expected help to mention ww-helper, got %q", got)
 	}
-	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("Use `cwt`")) {
-		t.Fatalf("expected help to mention cwt, got %q", got)
+	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("switch-path")) {
+		t.Fatalf("expected help to mention switch-path, got %q", got)
 	}
-	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("--fzf")) {
-		t.Fatalf("expected help to mention --fzf mode, got %q", got)
+	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("new-path")) {
+		t.Fatalf("expected help to mention new-path, got %q", got)
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
 	}
 }
 
-func TestRunIndexModePrintsSelectedPath(t *testing.T) {
+func TestRunSwitchPathPrintsSelectedPath(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	deps := fakeDeps{
@@ -44,7 +44,7 @@ func TestRunIndexModePrintsSelectedPath(t *testing.T) {
 		},
 	}
 
-	code := Run(context.Background(), []string{"2"}, bytes.NewReader(nil), stdout, stderr, deps)
+	code := Run(context.Background(), []string{"switch-path", "2"}, bytes.NewReader(nil), stdout, stderr, deps)
 
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
@@ -57,7 +57,7 @@ func TestRunIndexModePrintsSelectedPath(t *testing.T) {
 	}
 }
 
-func TestRunRejectsExtraArgsAfterIndex(t *testing.T) {
+func TestRunListPrintsMenuWithoutPrompt(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	deps := fakeDeps{
@@ -67,7 +67,56 @@ func TestRunRejectsExtraArgsAfterIndex(t *testing.T) {
 		},
 	}
 
-	code := Run(context.Background(), []string{"2", "junk"}, bytes.NewReader(nil), stdout, stderr, deps)
+	code := Run(context.Background(), []string{"list"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if stdout.String() == "" {
+		t.Fatal("expected list output on stdout")
+	}
+	if bytes.Contains(stdout.Bytes(), []byte("Select a worktree")) {
+		t.Fatalf("expected no prompt in list output, got %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
+func TestRunNewPathPrintsSelectedPath(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		worktrees: []worktree.Worktree{
+			{Index: 1, Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Index: 2, Path: "/repo/.worktrees/alpha", BranchLabel: "alpha"},
+		},
+	}
+
+	code := Run(context.Background(), []string{"new-path", "2"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if stdout.String() != "/repo/.worktrees/alpha\n" {
+		t.Fatalf("expected selected path on stdout, got %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
+func TestRunRejectsExtraArgsAfterSwitchPath(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		worktrees: []worktree.Worktree{
+			{Index: 1, Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Index: 2, Path: "/repo/.worktrees/alpha", BranchLabel: "alpha"},
+		},
+	}
+
+	code := Run(context.Background(), []string{"switch-path", "2", "junk"}, bytes.NewReader(nil), stdout, stderr, deps)
 
 	if code != 2 {
 		t.Fatalf("expected exit code 2, got %d", code)
@@ -84,7 +133,7 @@ func TestRunNonRepoReturnsExit3(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	code := Run(context.Background(), []string{"1"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{
+	code := Run(context.Background(), []string{"switch-path", "1"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{
 		err: git.ErrNotGitRepository,
 	})
 
@@ -100,7 +149,7 @@ func TestRunRejectsInvalidIndex(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	code := Run(context.Background(), []string{"abc"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
+	code := Run(context.Background(), []string{"switch-path", "abc"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
 
 	if code != 2 {
 		t.Fatalf("expected exit code 2, got %d", code)
@@ -119,7 +168,7 @@ func TestRunRejectsOutOfRangeIndex(t *testing.T) {
 		},
 	}
 
-	code := Run(context.Background(), []string{"2"}, bytes.NewReader(nil), stdout, stderr, deps)
+	code := Run(context.Background(), []string{"switch-path", "2"}, bytes.NewReader(nil), stdout, stderr, deps)
 
 	if code != 2 {
 		t.Fatalf("expected exit code 2, got %d", code)
@@ -129,7 +178,7 @@ func TestRunRejectsOutOfRangeIndex(t *testing.T) {
 	}
 }
 
-func TestRunFzfModePrintsSelectedPath(t *testing.T) {
+func TestRunSwitchPathFzfModePrintsSelectedPath(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	deps := fakeDeps{
@@ -140,7 +189,7 @@ func TestRunFzfModePrintsSelectedPath(t *testing.T) {
 		fzfSelected: worktree.Worktree{Index: 2, Path: "/repo/.worktrees/alpha", BranchLabel: "alpha"},
 	}
 
-	code := Run(context.Background(), []string{"--fzf"}, bytes.NewReader(nil), stdout, stderr, deps)
+	code := Run(context.Background(), []string{"switch-path", "--fzf"}, bytes.NewReader(nil), stdout, stderr, deps)
 
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
@@ -153,7 +202,7 @@ func TestRunFzfModePrintsSelectedPath(t *testing.T) {
 	}
 }
 
-func TestRunFzfModeReturnsExit3WhenFzfMissing(t *testing.T) {
+func TestRunSwitchPathFzfModeReturnsExit3WhenFzfMissing(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	deps := fakeDeps{
@@ -163,7 +212,7 @@ func TestRunFzfModeReturnsExit3WhenFzfMissing(t *testing.T) {
 		fzfErr: ui.ErrFzfNotInstalled,
 	}
 
-	code := Run(context.Background(), []string{"--fzf"}, bytes.NewReader(nil), stdout, stderr, deps)
+	code := Run(context.Background(), []string{"switch-path", "--fzf"}, bytes.NewReader(nil), stdout, stderr, deps)
 
 	if code != 3 {
 		t.Fatalf("expected exit code 3, got %d", code)
@@ -173,7 +222,7 @@ func TestRunFzfModeReturnsExit3WhenFzfMissing(t *testing.T) {
 	}
 }
 
-func TestRunFzfModeReturns130WhenCanceled(t *testing.T) {
+func TestRunSwitchPathFzfModeReturns130WhenCanceled(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	deps := fakeDeps{
@@ -184,7 +233,7 @@ func TestRunFzfModeReturns130WhenCanceled(t *testing.T) {
 		fzfErr: ui.ErrSelectionCanceled,
 	}
 
-	code := Run(context.Background(), []string{"--fzf"}, bytes.NewReader(nil), stdout, stderr, deps)
+	code := Run(context.Background(), []string{"switch-path", "--fzf"}, bytes.NewReader(nil), stdout, stderr, deps)
 
 	if code != 130 {
 		t.Fatalf("expected exit code 130, got %d", code)
@@ -194,11 +243,11 @@ func TestRunFzfModeReturns130WhenCanceled(t *testing.T) {
 	}
 }
 
-func TestRunRejectsExtraArgsAfterFzf(t *testing.T) {
+func TestRunRejectsExtraArgsAfterSwitchPathFzf(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	code := Run(context.Background(), []string{"--fzf", "junk"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
+	code := Run(context.Background(), []string{"switch-path", "--fzf", "junk"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
 
 	if code != 2 {
 		t.Fatalf("expected exit code 2, got %d", code)
@@ -211,7 +260,7 @@ func TestRunRejectsExtraArgsAfterFzf(t *testing.T) {
 	}
 }
 
-func TestRunInteractiveSelectionWritesMenuToStderrAndPathToStdout(t *testing.T) {
+func TestRunSwitchPathInteractiveSelectionWritesMenuToStderrAndPathToStdout(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	deps := fakeDeps{
@@ -237,7 +286,7 @@ func TestRunInteractiveSelectionWritesMenuToStderrAndPathToStdout(t *testing.T) 
 	}
 }
 
-func TestRunInteractiveSelectionReturnsNonZeroOnEOFWithoutSelection(t *testing.T) {
+func TestRunSwitchPathInteractiveSelectionReturnsNonZeroOnEOFWithoutSelection(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	deps := fakeDeps{

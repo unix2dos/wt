@@ -33,15 +33,26 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut
 		deps = RealDeps{}
 	}
 
-	if len(args) > 0 && args[0] == "--help" {
-		fmt.Fprintln(out, "Usage: wt [--fzf] [index]")
-		fmt.Fprintln(out, "")
-		fmt.Fprintln(out, "wt prints the selected git worktree path.")
-		fmt.Fprintln(out, "Use `cwt` to switch the current shell directory.")
-		fmt.Fprintln(out, "Use `wt --fzf` or `cwt --fzf` for fzf selection.")
-		return 0
+	if len(args) == 0 {
+		return runSwitchPath(ctx, args, in, out, errOut, deps)
 	}
 
+	switch args[0] {
+	case "--help", "-h", "help":
+		printHelperHelp(out)
+		return 0
+	case "switch-path":
+		return runSwitchPath(ctx, args[1:], in, out, errOut, deps)
+	case "new-path":
+		return runSwitchPath(ctx, args[1:], in, out, errOut, deps)
+	case "list":
+		return runList(ctx, out, errOut, deps)
+	default:
+		return runSwitchPath(ctx, args, in, out, errOut, deps)
+	}
+}
+
+func runSwitchPath(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut io.Writer, deps Deps) int {
 	if len(args) > 0 && args[0] == "--fzf" {
 		if len(args) > 1 {
 			fmt.Fprintf(errOut, "unexpected extra arguments: %s\n", strings.Join(args[1:], " "))
@@ -149,4 +160,37 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut
 
 	fmt.Fprintln(out, selected.Path)
 	return 0
+}
+
+func runList(ctx context.Context, out io.Writer, errOut io.Writer, deps Deps) int {
+	items, err := deps.ListWorktrees(ctx)
+	if err != nil {
+		if errors.Is(err, git.ErrNotGitRepository) {
+			fmt.Fprintln(errOut, "not a git repository")
+			return 3
+		}
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
+	if len(items) == 0 {
+		fmt.Fprintln(errOut, "no worktrees available")
+		return 1
+	}
+
+	for _, item := range items {
+		marker := " "
+		if item.IsCurrent {
+			marker = "*"
+		}
+		fmt.Fprintf(out, "[%d] %s %s %s\n", item.Index, marker, item.BranchLabel, item.Path)
+	}
+	return 0
+}
+
+func printHelperHelp(out io.Writer) {
+	fmt.Fprintln(out, "Usage: ww-helper [switch-path|list|new-path|--help]")
+	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "switch-path prints the selected git worktree path.")
+	fmt.Fprintln(out, "list prints the current worktree table.")
+	fmt.Fprintln(out, "new-path is reserved for worktree creation flow.")
 }

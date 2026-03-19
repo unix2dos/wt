@@ -15,7 +15,7 @@ func TestCLISelectsSecondWorktreePath(t *testing.T) {
 	second := repo.AddWorktree(t, "alpha")
 	bin := buildCLI(t)
 
-	cmd := exec.CommandContext(context.Background(), bin, "2")
+	cmd := exec.CommandContext(context.Background(), bin, "switch-path", "2")
 	cmd.Dir = repo.Root
 
 	var stdout, stderr bytes.Buffer
@@ -31,6 +31,27 @@ func TestCLISelectsSecondWorktreePath(t *testing.T) {
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
+func TestCLIListsWorktrees(t *testing.T) {
+	repo := newTestRepo(t)
+	repo.AddWorktree(t, "alpha")
+	bin := buildCLI(t)
+
+	cmd := exec.CommandContext(context.Background(), bin, "list")
+	cmd.Dir = repo.Root
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if !strings.Contains(stdout.String(), "[1]") || !strings.Contains(stdout.String(), "/.worktrees/alpha") {
+		t.Fatalf("expected human-readable list output, got %q", stdout.String())
 	}
 }
 
