@@ -49,6 +49,29 @@ func TestRunIndexModePrintsSelectedPath(t *testing.T) {
 	}
 }
 
+func TestRunRejectsExtraArgsAfterIndex(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		worktrees: []worktree.Worktree{
+			{Index: 1, Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Index: 2, Path: "/repo/.worktrees/alpha", BranchLabel: "alpha"},
+		},
+	}
+
+	code := Run(context.Background(), []string{"2", "junk"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 2 {
+		t.Fatalf("expected exit code 2, got %d", code)
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte("unexpected extra arguments")) {
+		t.Fatalf("expected extra-args message, got %q", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout output, got %q", stdout.String())
+	}
+}
+
 func TestRunNonRepoReturnsExit3(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}

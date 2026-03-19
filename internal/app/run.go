@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 
 	"wt/internal/git"
 	"wt/internal/worktree"
@@ -37,6 +38,11 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut
 	if len(args) == 0 || args[0] == "--fzf" {
 		fmt.Fprintln(errOut, "interactive selection not implemented")
 		return 1
+	}
+
+	if len(args) > 1 {
+		fmt.Fprintf(errOut, "unexpected extra arguments: %s\n", strings.Join(args[1:], " "))
+		return 2
 	}
 
 	index, err := strconv.Atoi(args[0])

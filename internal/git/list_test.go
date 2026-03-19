@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -42,7 +43,10 @@ func TestListWorktreesParsesAndNormalizes(t *testing.T) {
 func TestListWorktreesMapsNonRepoError(t *testing.T) {
 	runner := fakeRunner{
 		errors: map[string]error{
-			key("git", "rev-parse", "--show-toplevel"): errCommand("fatal: not a git repository (or any of the parent directories): .git"),
+			key("git", "rev-parse", "--show-toplevel"): errCommand("exit status 128"),
+		},
+		stderr: map[string]string{
+			key("git", "rev-parse", "--show-toplevel"): "fatal: not a git repository (or any of the parent directories): .git\n",
 		},
 	}
 
@@ -52,20 +56,52 @@ func TestListWorktreesMapsNonRepoError(t *testing.T) {
 	}
 }
 
+func TestListWorktreesIgnoresStderrOnSuccess(t *testing.T) {
+	runner := fakeRunner{
+		outputs: map[string]string{
+			key("git", "rev-parse", "--show-toplevel"): "/repo\n",
+			key("git", "-C", "/repo", "worktree", "list", "--porcelain", "-z"): strings.Join([]string{
+				"worktree /repo",
+				"HEAD 1111111",
+				"branch refs/heads/main",
+				"",
+			}, "\x00"),
+		},
+		stderr: map[string]string{
+			key("git", "rev-parse", "--show-toplevel"):                         "hint: noisy but harmless\n",
+			key("git", "-C", "/repo", "worktree", "list", "--porcelain", "-z"): "hint: noisy but harmless\n",
+		},
+	}
+
+	got, err := ListWorktrees(context.Background(), runner)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 worktree, got %d", len(got))
+	}
+	if got[0].Path != "/repo" {
+		t.Fatalf("expected parsed stdout only, got %#v", got[0])
+	}
+}
+
 type fakeRunner struct {
 	outputs map[string]string
+	stderr  map[string]string
 	errors  map[string]error
 }
 
-func (f fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+func (f fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, []byte, error) {
 	k := key(append([]string{name}, args...)...)
 	if err, ok := f.errors[k]; ok {
-		return nil, err
+		return nil, []byte(f.stderr[k]), err
 	}
-	if out, ok := f.outputs[k]; ok {
-		return []byte(out), nil
+	out := []byte(f.outputs[k])
+	errOut := []byte(f.stderr[k])
+	if out != nil || errOut != nil {
+		return out, errOut, nil
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 func key(parts ...string) string {
@@ -74,4 +110,4 @@ func key(parts ...string) string {
 
 type errCommand string
 
-func (e errCommand) Error() string { return string(e) }
+func (e errCommand) Error() string { return fmt.Sprintf("%s", string(e)) }
