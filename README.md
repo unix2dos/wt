@@ -2,6 +2,14 @@
 
 `ww` is a shell-first Git worktree tool for the current repository, with `fzf`-powered interactive switching and a built-in selector fallback.
 
+## Demo
+
+GitHub README pages do not preserve a playable terminal video/player, so the live `ww` demo is hosted on GitHub Pages.
+
+[![ww demo](docs/assets/ww-demo.svg)](https://unix2dos.github.io/ww/)
+
+Click the preview to open the playable demo page.
+
 ## Install
 
 For the best interactive workflow, install `fzf`. If `fzf` is not available, `ww` falls back to the built-in arrow-key selector automatically.
@@ -180,4 +188,13 @@ Artifacts are written to `dist/`:
 - `checksums.txt`
 - `install-release.sh`
 
-GitHub release publishing is wired through `.github/workflows/release.yml` and runs on tags matching `v*`.
+To publish a GitHub Release, create and push a tag matching `v*`:
+
+```bash
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push origin vX.Y.Z
+```
+
+GitHub release publishing is wired through `.github/workflows/release.yml` and only publishes when the workflow runs for `refs/tags/v*`.
+
+Manual `workflow_dispatch` runs still build the `dist/` artifacts, but they do not publish a GitHub Release.

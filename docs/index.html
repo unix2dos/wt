@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ww Demo</title>
+    <meta
+      name="description"
+      content="Watch a playable terminal demo of ww, the shell-first Git worktree tool."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    >
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/asciinema-player@3.15.1/dist/bundle/asciinema-player.min.css"
+    >
+    <style>
+      :root {
+        --bg: #f4efe6;
+        --bg-accent: #d8ebd0;
+        --panel: rgba(255, 251, 245, 0.88);
+        --panel-border: rgba(24, 44, 32, 0.14);
+        --ink: #16211a;
+        --muted: #536357;
+        --signal: #0d7a5f;
+        --signal-strong: #0b5e49;
+        --shadow: 0 30px 80px rgba(28, 49, 39, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Space Grotesk", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 38%),
+          radial-gradient(circle at right 20%, rgba(13, 122, 95, 0.14), transparent 26%),
+          linear-gradient(160deg, var(--bg) 0%, #f7f4ed 42%, var(--bg-accent) 100%);
+      }
+
+      main {
+        width: min(1120px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 48px 0 72px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 28px;
+        align-items: start;
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 360px);
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(12px);
+      }
+
+      .intro {
+        padding: 32px;
+      }
+
+      .eyebrow {
+        margin: 0 0 14px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--signal-strong);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2.4rem, 6vw, 4.8rem);
+        line-height: 0.95;
+      }
+
+      .lede {
+        margin: 18px 0 0;
+        max-width: 40rem;
+        font-size: 1.08rem;
+        line-height: 1.7;
+        color: var(--muted);
+      }
+
+      .meta {
+        padding: 28px;
+      }
+
+      .meta h2,
+      .player-wrap h2 {
+        margin: 0 0 14px;
+        font-size: 1rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .meta ol {
+        margin: 0;
+        padding-left: 1.2rem;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .meta li + li {
+        margin-top: 6px;
+      }
+
+      .meta code,
+      .footer code {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.92em;
+      }
+
+      .player-wrap {
+        margin-top: 28px;
+        padding: 28px;
+      }
+
+      #demo-player {
+        overflow: hidden;
+        border-radius: 20px;
+        border: 1px solid rgba(22, 33, 26, 0.08);
+        box-shadow: 0 22px 60px rgba(11, 94, 73, 0.18);
+      }
+
+      .footer {
+        margin-top: 16px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px 18px;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.96rem;
+        color: var(--muted);
+      }
+
+      .footer a {
+        color: var(--signal);
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .footer a:hover {
+        color: var(--signal-strong);
+      }
+
+      @media (max-width: 900px) {
+        .hero {
+          grid-template-columns: 1fr;
+        }
+
+        main {
+          width: min(100vw - 20px, 1120px);
+          padding-top: 24px;
+          padding-bottom: 48px;
+        }
+
+        .intro,
+        .meta,
+        .player-wrap {
+          padding: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div class="intro card">
+          <p class="eyebrow">Shell-First Demo</p>
+          <h1>ww Demo</h1>
+          <p class="lede">
+            A recorded terminal session showing the built-in interactive selector,
+            path switching, and `ww new` flow inside a throwaway Git repository.
+            This page exists because GitHub README rendering strips playable terminal media.
+          </p>
+        </div>
+        <aside class="meta card">
+          <h2>What This Covers</h2>
+          <ol>
+            <li>Open `ww` and drive the built-in selector with arrow keys.</li>
+            <li>Confirm the shell has switched into an existing worktree.</li>
+            <li>Create a fresh worktree with `ww new feat-demo`.</li>
+            <li>List worktrees again from the newly created branch.</li>
+          </ol>
+        </aside>
+      </section>
+
+      <section class="player-wrap card">
+        <h2>Playable Demo</h2>
+        <div id="demo-player" aria-label="ww terminal demo"></div>
+        <div class="footer">
+          <span>Playback source: <code>docs/assets/ww-demo.cast</code></span>
+          <a href="https://github.com/unix2dos/ww">Back to repository</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.15.1/dist/bundle/asciinema-player.min.js"></script>
+    <script>
+      window.addEventListener("DOMContentLoaded", () => {
+        AsciinemaPlayer.create("assets/ww-demo.cast", document.getElementById("demo-player"), {
+          cols: 110,
+          rows: 28,
+          preload: true,
+          loop: false,
+          autoPlay: false,
+          idleTimeLimit: 0.8,
+          poster: "npt:1",
+          theme: "nord",
+          fit: false,
+          terminalFontSize: "15px",
+          terminalFontFamily:
+            "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+        });
+      });
+    </script>
+  </body>
+</html>

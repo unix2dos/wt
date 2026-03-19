@@ -1,0 +1,47 @@
+#!/usr/bin/expect -f
+
+set timeout 15
+
+proc need_env {name} {
+  if {![info exists ::env($name)] || $::env($name) eq ""} {
+    puts stderr "missing required env var: $name"
+    exit 2
+  }
+  return $::env($name)
+}
+
+set demo_repo [need_env "WW_DEMO_REPO"]
+set helper_bin [need_env "WW_DEMO_HELPER_BIN"]
+set shell_file [need_env "WW_DEMO_SHELL_FILE"]
+set demo_home [need_env "WW_DEMO_HOME"]
+set state_home [need_env "WW_DEMO_STATE_HOME"]
+set demo_path [need_env "WW_DEMO_PATH"]
+
+spawn -noecho env -i HOME=$demo_home XDG_STATE_HOME=$state_home PATH=$demo_path TERM=xterm-256color PS1=ww\> BASH_SILENCE_DEPRECATION_WARNING=1 SHELL=/bin/bash /bin/bash --noprofile --norc -i
+
+expect "ww>"
+send -- "export WW_HELPER_BIN='$helper_bin'\r"
+expect "ww>"
+send -- "source '$shell_file'\r"
+expect "ww>"
+send -- "cd '$demo_repo'\r"
+expect "ww>"
+send -- "ww\r"
+expect "Use Up/Down"
+send -- "\033\[B"
+after 250
+send -- "\r"
+expect "ww>"
+send -- "pwd\r"
+expect ".worktrees/feat-a"
+expect "ww>"
+send -- "ww new feat-demo\r"
+expect "ww>"
+send -- "git branch --show-current\r"
+expect "feat-demo"
+expect "ww>"
+send -- "ww list\r"
+expect "feat-demo"
+expect "ww>"
+send -- "exit\r"
+expect eof
