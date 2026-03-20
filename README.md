@@ -1,6 +1,20 @@
 # ww
 
-`ww` is a shell-first Git worktree tool for the current repository, with `fzf`-powered interactive switching and a built-in selector fallback.
+*w+w. Short press. Short move. Fast worktree switching.*
+
+`ww` is a shell-first Git worktree switcher for the current repository, with `fzf` for the fast path and a built-in selector when `fzf` is unavailable.
+
+With `fzf`, the fast path looks like this:
+
+```text
+$ ww
+Select a worktree> fe
+  2    feat-a    /path/to/repo/.worktrees/feat-a
+> 4    feat-b    /path/to/repo/.worktrees/feat-b
+  7    release   /path/to/repo/.worktrees/release
+
+Type a little. Move a little. Press Enter. Switch now.
+```
 
 ## Demo
 
