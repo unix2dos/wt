@@ -11,14 +11,14 @@ import (
 
 func TestFormatFzfCandidatesIncludesIndexStatusBranchAndPath(t *testing.T) {
 	got := string(formatFzfCandidates([]worktree.Worktree{
-		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true},
-		{Index: 2, BranchLabel: "feat-a", Path: "/repo/.worktrees/feat-a"},
+		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true, IsDirty: true},
+		{Index: 2, BranchLabel: "feat-a", Path: "/repo/.worktrees/feat-a", IsDirty: true},
 	}))
 
-	if !strings.Contains(got, "1\tACTIVE\tmain\t/repo") {
+	if !strings.Contains(got, "1\tACTIVE*\tmain\t/repo") {
 		t.Fatalf("expected current candidate, got %q", got)
 	}
-	if !strings.Contains(got, "2\t\tfeat-a\t/repo/.worktrees/feat-a") {
+	if !strings.Contains(got, "2\tDIRTY\tfeat-a\t/repo/.worktrees/feat-a") {
 		t.Fatalf("expected non-current candidate, got %q", got)
 	}
 }
@@ -26,12 +26,12 @@ func TestFormatFzfCandidatesIncludesIndexStatusBranchAndPath(t *testing.T) {
 func TestSelectWorktreeWithFzfReturnsSelectedWorktree(t *testing.T) {
 	runner := &fakeFzfRunner{
 		lookPath: "/usr/bin/fzf",
-		stdout:   []byte("2\t\tfeat-a\t/repo/.worktrees/feat-a\n"),
+		stdout:   []byte("2\tDIRTY\tfeat-a\t/repo/.worktrees/feat-a\n"),
 	}
 
 	got, err := SelectWorktreeWithFzf(context.Background(), []worktree.Worktree{
 		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true},
-		{Index: 2, BranchLabel: "feat-a", Path: "/repo/.worktrees/feat-a"},
+		{Index: 2, BranchLabel: "feat-a", Path: "/repo/.worktrees/feat-a", IsDirty: true},
 	}, runner)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -56,12 +56,12 @@ func TestSelectWorktreeWithFzfReturnsSelectedWorktree(t *testing.T) {
 func TestSelectWorktreeWithFzfFocusesCurrentWorktreeByDefault(t *testing.T) {
 	runner := &fakeFzfRunner{
 		lookPath: "/usr/bin/fzf",
-		stdout:   []byte("2\tACTIVE\tmain\t/repo\n"),
+		stdout:   []byte("2\tACTIVE*\tmain\t/repo\n"),
 	}
 
 	_, err := SelectWorktreeWithFzf(context.Background(), []worktree.Worktree{
 		{Index: 1, BranchLabel: "alpha", Path: "/repo/.worktrees/alpha"},
-		{Index: 2, BranchLabel: "main", Path: "/repo", IsCurrent: true},
+		{Index: 2, BranchLabel: "main", Path: "/repo", IsCurrent: true, IsDirty: true},
 	}, runner)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

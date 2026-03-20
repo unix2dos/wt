@@ -218,11 +218,7 @@ func runList(ctx context.Context, out io.Writer, errOut io.Writer, deps Deps) in
 	}
 
 	for _, item := range items {
-		status := ""
-		if item.IsCurrent {
-			status = "ACTIVE"
-		}
-		fmt.Fprintf(out, "[%d] %-6s %s %s\n", item.Index, status, item.BranchLabel, item.Path)
+		fmt.Fprintf(out, "[%d] %-6s %s %s\n", item.Index, ui.StatusLabel(item), item.BranchLabel, item.Path)
 	}
 	return 0
 }

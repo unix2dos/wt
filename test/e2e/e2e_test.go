@@ -167,6 +167,32 @@ func TestCLIListStaysInCreationOrderAfterSwitch(t *testing.T) {
 	}
 }
 
+func TestCLIListShowsDirtyWorktrees(t *testing.T) {
+	repo := newTestRepo(t)
+	alpha := repo.AddWorktree(t, "alpha")
+	if err := os.WriteFile(filepath.Join(alpha, "scratch.txt"), []byte("dirty\n"), 0o644); err != nil {
+		t.Fatalf("write dirty file: %v", err)
+	}
+	bin := buildCLI(t)
+
+	cmd := exec.CommandContext(context.Background(), bin, "list")
+	cmd.Dir = repo.Root
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "DIRTY  alpha") {
+		t.Fatalf("expected dirty alpha in list output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "ACTIVE main") {
+		t.Fatalf("expected active main in list output, got %q", stdout.String())
+	}
+}
+
 func TestCLICreatesNewWorktreePath(t *testing.T) {
 	repo := newTestRepo(t)
 	bin := buildCLI(t)

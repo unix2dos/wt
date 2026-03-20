@@ -220,6 +220,35 @@ func TestRunListPrintsMenuWithoutPrompt(t *testing.T) {
 	}
 }
 
+func TestRunListShowsDirtyStatuses(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		touched: &touchRecord{},
+		repoKey: "/repo/.git",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", IsCurrent: true, IsDirty: true, CreatedAt: 10},
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", IsDirty: true, CreatedAt: 20},
+			{Path: "/repo/.worktrees/beta", BranchLabel: "beta", CreatedAt: 30},
+		},
+	}
+
+	code := Run(context.Background(), []string{"list"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if !strings.Contains(stdout.String(), "[1] ACTIVE* main /repo") {
+		t.Fatalf("expected dirty active status in list output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "[2] DIRTY  alpha /repo/.worktrees/alpha") {
+		t.Fatalf("expected dirty non-current status in list output, got %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
 func TestRunNewPathPrintsSelectedPath(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}

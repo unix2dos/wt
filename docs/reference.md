@@ -101,7 +101,15 @@ Without `fzf`, this opens the built-in selector like:
 Use Up/Down (or j/k). Enter to confirm. Esc/Ctrl-C to cancel.
 ```
 
-Move with arrow keys and press Enter to switch. The active shell worktree is labeled `ACTIVE`, and the selector starts on it by default.
+Move with arrow keys and press Enter to switch. The selector starts on the active shell worktree by default.
+
+The status column can show:
+
+- `ACTIVE` for the current clean worktree
+- `ACTIVE*` for the current dirty worktree
+- `DIRTY` for a non-current dirty worktree
+
+`ww` ignores its own `.worktrees/` management directory when computing this status so the main worktree is not marked dirty just because linked worktrees exist.
 
 ### Direct Index Or Name
 
@@ -121,7 +129,7 @@ ww list
 
 This prints the current worktree table without changing your shell directory.
 
-Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, and the current one is labeled `ACTIVE`.
+Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, and the status column uses the same `ACTIVE` / `ACTIVE*` / `DIRTY` markers as the interactive selector.
 
 ### New
 

@@ -11,8 +11,8 @@ import (
 func TestPreviewRemovalMarksDirtyAndUnmergedWorktree(t *testing.T) {
 	runner := &recordingRunner{
 		outputs: map[string]string{
-			key("git", "-C", "/repo/.worktrees/feat-a", "status", "--porcelain"):                                   " M README.md\n",
-			key("git", "-C", "/repo/.worktrees/feat-a", "branch", "--format=%(refname:short)", "--merged", "main"): "main\n",
+			key("git", "-C", "/repo/.worktrees/feat-a", "status", "--porcelain", "--", ".", ":(exclude).worktrees"): " M README.md\n",
+			key("git", "-C", "/repo/.worktrees/feat-a", "branch", "--format=%(refname:short)", "--merged", "main"):  "main\n",
 		},
 	}
 
@@ -38,10 +38,10 @@ func TestPreviewRemovalMarksDirtyAndUnmergedWorktree(t *testing.T) {
 func TestRemoveWorktreeDeletesMergedBranch(t *testing.T) {
 	runner := &recordingRunner{
 		outputs: map[string]string{
-			key("git", "rev-parse", "--show-toplevel"):                                                             "/repo/.worktrees/current\n",
-			key("git", "-C", "/repo/.worktrees/current", "rev-parse", "--git-common-dir"):                          "/repo/.git\n",
-			key("git", "-C", "/repo/.worktrees/feat-a", "status", "--porcelain"):                                   "",
-			key("git", "-C", "/repo/.worktrees/feat-a", "branch", "--format=%(refname:short)", "--merged", "main"): "main\nfeat-a\n",
+			key("git", "rev-parse", "--show-toplevel"):                                                              "/repo/.worktrees/current\n",
+			key("git", "-C", "/repo/.worktrees/current", "rev-parse", "--git-common-dir"):                           "/repo/.git\n",
+			key("git", "-C", "/repo/.worktrees/feat-a", "status", "--porcelain", "--", ".", ":(exclude).worktrees"): "",
+			key("git", "-C", "/repo/.worktrees/feat-a", "branch", "--format=%(refname:short)", "--merged", "main"):  "main\nfeat-a\n",
 		},
 	}
 
@@ -70,10 +70,10 @@ func TestRemoveWorktreeDeletesMergedBranch(t *testing.T) {
 func TestRemoveWorktreeKeepsUnmergedBranch(t *testing.T) {
 	runner := &recordingRunner{
 		outputs: map[string]string{
-			key("git", "rev-parse", "--show-toplevel"):                                                             "/repo/.worktrees/current\n",
-			key("git", "-C", "/repo/.worktrees/current", "rev-parse", "--git-common-dir"):                          "/repo/.git\n",
-			key("git", "-C", "/repo/.worktrees/feat-a", "status", "--porcelain"):                                   "",
-			key("git", "-C", "/repo/.worktrees/feat-a", "branch", "--format=%(refname:short)", "--merged", "main"): "main\n",
+			key("git", "rev-parse", "--show-toplevel"):                                                              "/repo/.worktrees/current\n",
+			key("git", "-C", "/repo/.worktrees/current", "rev-parse", "--git-common-dir"):                           "/repo/.git\n",
+			key("git", "-C", "/repo/.worktrees/feat-a", "status", "--porcelain", "--", ".", ":(exclude).worktrees"): "",
+			key("git", "-C", "/repo/.worktrees/feat-a", "branch", "--format=%(refname:short)", "--merged", "main"):  "main\n",
 		},
 	}
 
@@ -96,8 +96,8 @@ func TestRemoveWorktreeKeepsUnmergedBranch(t *testing.T) {
 func TestRemoveWorktreeRejectsDirtyWorktreeWithoutForce(t *testing.T) {
 	runner := &recordingRunner{
 		outputs: map[string]string{
-			key("git", "-C", "/repo/.worktrees/feat-a", "status", "--porcelain"):                                   " M README.md\n",
-			key("git", "-C", "/repo/.worktrees/feat-a", "branch", "--format=%(refname:short)", "--merged", "main"): "main\nfeat-a\n",
+			key("git", "-C", "/repo/.worktrees/feat-a", "status", "--porcelain", "--", ".", ":(exclude).worktrees"): " M README.md\n",
+			key("git", "-C", "/repo/.worktrees/feat-a", "branch", "--format=%(refname:short)", "--merged", "main"):  "main\nfeat-a\n",
 		},
 	}
 

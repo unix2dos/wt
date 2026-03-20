@@ -124,12 +124,12 @@ func RemoveWorktree(ctx context.Context, runner Runner, item worktree.Worktree, 
 }
 
 func worktreeDirty(ctx context.Context, runner Runner, path string) (bool, error) {
-	out, errOut, err := runner.Run(ctx, "git", "-C", path, "status", "--porcelain")
+	out, errOut, err := runner.Run(ctx, "git", "-C", path, "status", "--porcelain", "--", ".", ":(exclude).worktrees")
 	if err != nil {
 		if isNotGitRepository(err, out, errOut) {
 			return false, ErrNotGitRepository
 		}
-		return false, commandError("git status --porcelain", err, errOut)
+		return false, commandError("git status --porcelain -- . :(exclude).worktrees", err, errOut)
 	}
 	return len(bytes.TrimSpace(out)) > 0, nil
 }

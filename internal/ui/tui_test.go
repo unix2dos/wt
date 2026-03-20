@@ -14,15 +14,15 @@ func TestRenderTUIShowsActiveStatusAndActiveRow(t *testing.T) {
 	var buf bytes.Buffer
 
 	RenderTUI(&buf, []worktree.Worktree{
-		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true},
-		{Index: 2, BranchLabel: "feat-a", Path: "/repo/.worktrees/feat-a"},
+		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true, IsDirty: true},
+		{Index: 2, BranchLabel: "feat-a", Path: "/repo/.worktrees/feat-a", IsDirty: true},
 	}, 1)
 
 	got := buf.String()
-	if !strings.Contains(got, "  [1] ACTIVE main /repo") {
+	if !strings.Contains(got, "  [1] ACTIVE* main /repo") {
 		t.Fatalf("expected current row, got %q", got)
 	}
-	if !strings.Contains(got, "* [2]        feat-a /repo/.worktrees/feat-a") {
+	if !strings.Contains(got, "* [2] DIRTY  feat-a /repo/.worktrees/feat-a") {
 		t.Fatalf("expected active row, got %q", got)
 	}
 	if !strings.Contains(got, "Enter to confirm") {

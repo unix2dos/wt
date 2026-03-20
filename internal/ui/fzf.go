@@ -89,10 +89,7 @@ func formatFzfCandidates(items []worktree.Worktree) []byte {
 }
 
 func fzfStatus(item worktree.Worktree) string {
-	if item.IsCurrent {
-		return "ACTIVE"
-	}
-	return ""
+	return StatusLabel(item)
 }
 
 func initialFzfPosition(items []worktree.Worktree) int {

@@ -136,6 +136,38 @@ func TestListWorktreesAnnotatesCreationTimesWhenPathsExist(t *testing.T) {
 	}
 }
 
+func TestListWorktreesAnnotatesDirtyState(t *testing.T) {
+	runner := fakeRunner{
+		outputs: map[string]string{
+			key("git", "rev-parse", "--show-toplevel"):                                   "/repo/worktrees/current\n",
+			key("git", "-C", "/repo/worktrees/current", "rev-parse", "--git-common-dir"): "/repo/.git\n",
+			key("git", "-C", "/repo/worktrees/current", "worktree", "list", "--porcelain", "-z"): strings.Join([]string{
+				"worktree /repo/worktrees/current",
+				"HEAD 1111111",
+				"branch refs/heads/main",
+				"",
+				"worktree /repo/.worktrees/feat-a",
+				"HEAD 2222222",
+				"branch refs/heads/feat-a",
+				"",
+			}, "\x00"),
+			key("git", "-C", "/repo/worktrees/current", "status", "--porcelain", "--", ".", ":(exclude).worktrees"): "",
+			key("git", "-C", "/repo/.worktrees/feat-a", "status", "--porcelain", "--", ".", ":(exclude).worktrees"): "?? scratch.txt\n",
+		},
+	}
+
+	_, got, err := ListWorktrees(context.Background(), runner)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got[0].IsDirty {
+		t.Fatalf("expected current worktree clean, got %#v", got[0])
+	}
+	if !got[1].IsDirty {
+		t.Fatalf("expected linked worktree dirty, got %#v", got[1])
+	}
+}
+
 func TestCurrentRepoKeyReturnsCanonicalGitCommonDir(t *testing.T) {
 	runner := fakeRunner{
 		outputs: map[string]string{

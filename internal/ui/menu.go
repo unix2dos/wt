@@ -19,7 +19,7 @@ func RenderMenu(w io.Writer, items []worktree.Worktree) {
 }
 
 func formatMenuRow(item worktree.Worktree) string {
-	return fmt.Sprintf("[%d] %-6s %s %s", item.Index, worktreeStatus(item), item.BranchLabel, item.Path)
+	return fmt.Sprintf("[%d] %-6s %s %s", item.Index, StatusLabel(item), item.BranchLabel, item.Path)
 }
 
 func formatTUIRow(item worktree.Worktree, active bool) string {
@@ -30,9 +30,15 @@ func formatTUIRow(item worktree.Worktree, active bool) string {
 	return fmt.Sprintf("%s %s", prefix, formatMenuRow(item))
 }
 
-func worktreeStatus(item worktree.Worktree) string {
+func StatusLabel(item worktree.Worktree) string {
 	if item.IsCurrent {
+		if item.IsDirty {
+			return "ACTIVE*"
+		}
 		return "ACTIVE"
+	}
+	if item.IsDirty {
+		return "DIRTY"
 	}
 	return ""
 }
