@@ -16,7 +16,7 @@ type Store struct {
 	mu   sync.Mutex
 }
 
-type diskState struct {
+type diskStateV1 struct {
 	Repos map[string]map[string]int64 `json:"repos"`
 }
 
@@ -33,13 +33,26 @@ func NewStoreAt(path string) *Store {
 }
 
 func (s *Store) Load(repoKey string) (map[string]int64, error) {
-	var out map[string]int64
+	meta, err := s.LoadMetadata(repoKey)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make(map[string]int64, len(meta))
+	for path, item := range meta {
+		out[path] = item.LastUsedAt
+	}
+	return out, nil
+}
+
+func (s *Store) LoadMetadata(repoKey string) (map[string]WorktreeMetadata, error) {
+	var out map[string]WorktreeMetadata
 	err := s.withLock(func() error {
-		state, err := s.readLocked()
+		state, err := s.readV2Locked()
 		if err != nil {
 			return err
 		}
-		out = cloneRepoState(state.Repos[repoKey])
+		out = cloneRepoMetadata(state.Repos[repoKey].Worktrees)
 		return nil
 	})
 	return out, err
@@ -47,20 +60,63 @@ func (s *Store) Load(repoKey string) (map[string]int64, error) {
 
 func (s *Store) Touch(repoKey, path string) error {
 	return s.withLock(func() error {
-		state, err := s.readLocked()
+		state, err := s.readV2Locked()
 		if err != nil {
 			return err
 		}
 		if state.Repos == nil {
-			state.Repos = make(map[string]map[string]int64)
+			state.Repos = make(map[string]RepoState)
 		}
 		repo := state.Repos[repoKey]
-		if repo == nil {
-			repo = make(map[string]int64)
+		if repo.Worktrees == nil {
+			repo.Worktrees = make(map[string]WorktreeMetadata)
 		}
-		repo[path] = s.nowFunc().UnixNano()
+		meta := repo.Worktrees[path]
+		meta.LastUsedAt = s.nowFunc().UnixNano()
+		if meta.CreatedAt == 0 {
+			meta.CreatedAt = metadataCreatedAt(path)
+		}
+		repo.Worktrees[path] = meta
 		state.Repos[repoKey] = repo
-		return s.writeLocked(state)
+		return s.writeV2Locked(state)
+	})
+}
+
+func (s *Store) RecordWorktree(repoKey, path string, meta WorktreeMetadata) error {
+	return s.withLock(func() error {
+		state, err := s.readV2Locked()
+		if err != nil {
+			return err
+		}
+		if state.Repos == nil {
+			state.Repos = make(map[string]RepoState)
+		}
+		repo := state.Repos[repoKey]
+		if repo.Worktrees == nil {
+			repo.Worktrees = make(map[string]WorktreeMetadata)
+		}
+
+		current := repo.Worktrees[path]
+		if meta.LastUsedAt == 0 {
+			meta.LastUsedAt = current.LastUsedAt
+		}
+		if meta.CreatedAt == 0 {
+			if current.CreatedAt != 0 {
+				meta.CreatedAt = current.CreatedAt
+			} else {
+				meta.CreatedAt = metadataCreatedAt(path)
+			}
+		}
+		if meta.Label == "" {
+			meta.Label = current.Label
+		}
+		if meta.TTL == "" {
+			meta.TTL = current.TTL
+		}
+
+		repo.Worktrees[path] = meta
+		state.Repos[repoKey] = repo
+		return s.writeV2Locked(state)
 	})
 }
 
@@ -90,40 +146,99 @@ func (s *Store) withLock(fn func() error) error {
 	return fn()
 }
 
-func (s *Store) readLocked() (diskState, error) {
+func (s *Store) readV2Locked() (DiskStateV2, error) {
 	if s.path == "" {
-		return diskState{}, errors.New("state path is empty")
+		return DiskStateV2{}, errors.New("state path is empty")
 	}
 
-	raw, err := os.ReadFile(s.path)
+	raw, err := os.ReadFile(s.v2Path())
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return diskState{}, nil
+			return s.migrateV1Locked()
 		}
-		return diskState{}, err
+		return DiskStateV2{}, err
 	}
 
 	if len(raw) == 0 {
-		return diskState{}, nil
+		return emptyDiskStateV2(), nil
 	}
 
-	var state diskState
+	var state DiskStateV2
 	if err := json.Unmarshal(raw, &state); err != nil {
-		return diskState{}, err
+		return DiskStateV2{}, err
 	}
 	if state.Repos == nil {
-		state.Repos = make(map[string]map[string]int64)
+		state.Repos = make(map[string]RepoState)
+	}
+	if state.Version == 0 {
+		state.Version = 2
 	}
 	return state, nil
 }
 
-func (s *Store) writeLocked(state diskState) error {
+func (s *Store) migrateV1Locked() (DiskStateV2, error) {
+	v1State, exists, err := s.readV1Locked()
+	if err != nil {
+		return DiskStateV2{}, err
+	}
+	if !exists {
+		return emptyDiskStateV2(), nil
+	}
+
+	state := emptyDiskStateV2()
+	for repoKey, repo := range v1State.Repos {
+		worktrees := make(map[string]WorktreeMetadata, len(repo))
+		for path, lastUsedAt := range repo {
+			worktrees[path] = WorktreeMetadata{
+				LastUsedAt: lastUsedAt,
+				CreatedAt:  metadataCreatedAt(path),
+			}
+		}
+		state.Repos[repoKey] = RepoState{Worktrees: worktrees}
+	}
+
+	if err := s.writeV2Locked(state); err != nil {
+		return DiskStateV2{}, err
+	}
+	return state, nil
+}
+
+func (s *Store) readV1Locked() (diskStateV1, bool, error) {
+	raw, err := os.ReadFile(s.v1Path())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return diskStateV1{}, false, nil
+		}
+		return diskStateV1{}, false, err
+	}
+	if len(raw) == 0 {
+		return diskStateV1{Repos: make(map[string]map[string]int64)}, true, nil
+	}
+
+	var state diskStateV1
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return diskStateV1{}, false, err
+	}
+	if state.Repos == nil {
+		state.Repos = make(map[string]map[string]int64)
+	}
+	return state, true, nil
+}
+
+func (s *Store) writeV2Locked(state DiskStateV2) error {
 	if s.path == "" {
 		return errors.New("state path is empty")
 	}
 
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+	path := s.v2Path()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
+	}
+	if state.Version == 0 {
+		state.Version = 2
+	}
+	if state.Repos == nil {
+		state.Repos = make(map[string]RepoState)
 	}
 
 	encoded, err := json.MarshalIndent(state, "", "  ")
@@ -132,8 +247,8 @@ func (s *Store) writeLocked(state diskState) error {
 	}
 	encoded = append(encoded, '\n')
 
-	dir := filepath.Dir(s.path)
-	tmp, err := os.CreateTemp(dir, filepath.Base(s.path)+".*.tmp")
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
 	}
@@ -147,11 +262,11 @@ func (s *Store) writeLocked(state diskState) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, s.path)
+	return os.Rename(tmpName, path)
 }
 
 func (s *Store) lockPath() string {
-	return s.path + ".lock"
+	return s.v1Path() + ".lock"
 }
 
 func (s *Store) nowFunc() time.Time {
@@ -170,6 +285,46 @@ func cloneRepoState(src map[string]int64) map[string]int64 {
 		out[k] = v
 	}
 	return out
+}
+
+func cloneRepoMetadata(src map[string]WorktreeMetadata) map[string]WorktreeMetadata {
+	if len(src) == 0 {
+		return map[string]WorktreeMetadata{}
+	}
+	out := make(map[string]WorktreeMetadata, len(src))
+	for path, meta := range src {
+		out[path] = meta
+	}
+	return out
+}
+
+func emptyDiskStateV2() DiskStateV2 {
+	return DiskStateV2{
+		Version: 2,
+		Repos:   make(map[string]RepoState),
+	}
+}
+
+func metadataCreatedAt(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.ModTime().UnixNano()
+}
+
+func (s *Store) v1Path() string {
+	if filepath.Base(s.path) == "state-v2.json" {
+		return filepath.Join(filepath.Dir(s.path), "state.json")
+	}
+	return s.path
+}
+
+func (s *Store) v2Path() string {
+	if filepath.Base(s.path) == "state-v2.json" {
+		return s.path
+	}
+	return filepath.Join(filepath.Dir(s.path), "state-v2.json")
 }
 
 func defaultPath() (string, error) {

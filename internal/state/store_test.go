@@ -1,6 +1,7 @@
 package state
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -153,5 +154,130 @@ func TestStoreLockBlocksSecondInstance(t *testing.T) {
 		if err := <-errCh; err != nil {
 			t.Fatalf("withLock %d: %v", i, err)
 		}
+	}
+}
+
+func TestStoreMigratesV1IntoV2State(t *testing.T) {
+	dir := t.TempDir()
+	repoKey := filepath.Join(dir, "repo", ".git")
+	worktreePath := filepath.Join(dir, "repo", ".worktrees", "alpha")
+	if err := os.MkdirAll(worktreePath, 0o755); err != nil {
+		t.Fatalf("mkdir worktree: %v", err)
+	}
+
+	v1Path := filepath.Join(dir, "state.json")
+	original := []byte("{\n  \"repos\": {\n    \"" + repoKey + "\": {\n      \"" + worktreePath + "\": 100\n    }\n  }\n}\n")
+	if err := os.WriteFile(v1Path, original, 0o644); err != nil {
+		t.Fatalf("write v1 state: %v", err)
+	}
+
+	store := NewStoreAt(v1Path)
+	got, err := store.LoadMetadata(repoKey)
+	if err != nil {
+		t.Fatalf("LoadMetadata() error: %v", err)
+	}
+
+	meta, ok := got[worktreePath]
+	if !ok {
+		t.Fatalf("expected migrated metadata for %q, got %#v", worktreePath, got)
+	}
+	if meta.LastUsedAt != 100 {
+		t.Fatalf("LastUsedAt = %d, want 100", meta.LastUsedAt)
+	}
+	if meta.CreatedAt == 0 {
+		t.Fatalf("CreatedAt = 0, want backfilled timestamp")
+	}
+
+	after, err := os.ReadFile(v1Path)
+	if err != nil {
+		t.Fatalf("read v1 state: %v", err)
+	}
+	if string(after) != string(original) {
+		t.Fatalf("v1 state changed:\n%s", string(after))
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "state-v2.json")); err != nil {
+		t.Fatalf("expected state-v2.json to exist: %v", err)
+	}
+}
+
+func TestStoreTouchWritesV2LastUsedAt(t *testing.T) {
+	dir := t.TempDir()
+	store := &Store{
+		path: filepath.Join(dir, "state.json"),
+		now: func() time.Time {
+			return time.Unix(100, 0)
+		},
+	}
+
+	repoKey := filepath.Join(dir, "repo", ".git")
+	worktreePath := filepath.Join(dir, "repo", ".worktrees", "alpha")
+	if err := store.Touch(repoKey, worktreePath); err != nil {
+		t.Fatalf("Touch() error: %v", err)
+	}
+
+	got, err := store.LoadMetadata(repoKey)
+	if err != nil {
+		t.Fatalf("LoadMetadata() error: %v", err)
+	}
+	if got[worktreePath].LastUsedAt != time.Unix(100, 0).UnixNano() {
+		t.Fatalf("LastUsedAt = %d, want %d", got[worktreePath].LastUsedAt, time.Unix(100, 0).UnixNano())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "state-v2.json")); err != nil {
+		t.Fatalf("expected v2 file: %v", err)
+	}
+}
+
+func TestStoreCreateMetadataPersistsLabelAndTTL(t *testing.T) {
+	dir := t.TempDir()
+	store := &Store{
+		path: filepath.Join(dir, "state.json"),
+		now: func() time.Time {
+			return time.Unix(300, 0)
+		},
+	}
+
+	repoKey := filepath.Join(dir, "repo", ".git")
+	worktreePath := filepath.Join(dir, "repo", ".worktrees", "alpha")
+	meta := WorktreeMetadata{
+		CreatedAt: 200,
+		Label:     "agent:claude-code",
+		TTL:       "24h",
+	}
+	if err := store.RecordWorktree(repoKey, worktreePath, meta); err != nil {
+		t.Fatalf("RecordWorktree() error: %v", err)
+	}
+	if err := store.Touch(repoKey, worktreePath); err != nil {
+		t.Fatalf("Touch() error: %v", err)
+	}
+
+	got, err := store.LoadMetadata(repoKey)
+	if err != nil {
+		t.Fatalf("LoadMetadata() error: %v", err)
+	}
+	if got[worktreePath].CreatedAt != meta.CreatedAt {
+		t.Fatalf("CreatedAt = %d, want %d", got[worktreePath].CreatedAt, meta.CreatedAt)
+	}
+	if got[worktreePath].Label != meta.Label {
+		t.Fatalf("Label = %q, want %q", got[worktreePath].Label, meta.Label)
+	}
+	if got[worktreePath].TTL != meta.TTL {
+		t.Fatalf("TTL = %q, want %q", got[worktreePath].TTL, meta.TTL)
+	}
+	if got[worktreePath].LastUsedAt != time.Unix(300, 0).UnixNano() {
+		t.Fatalf("LastUsedAt = %d, want %d", got[worktreePath].LastUsedAt, time.Unix(300, 0).UnixNano())
+	}
+}
+
+func TestStoreLoadMissingRepoReturnsEmptyMetadataMap(t *testing.T) {
+	dir := t.TempDir()
+	store := &Store{path: filepath.Join(dir, "state.json")}
+
+	got, err := store.LoadMetadata(filepath.Join(dir, "repo", ".git"))
+	if err != nil {
+		t.Fatalf("LoadMetadata() error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected empty metadata map, got %#v", got)
 	}
 }
