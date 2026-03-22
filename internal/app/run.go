@@ -142,6 +142,8 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut
 		return runNewPath(ctx, args[1:], out, errOut, deps)
 	case "list":
 		return runList(ctx, args[1:], out, errOut, deps)
+	case "gc":
+		return runGC(ctx, args[1:], out, errOut, deps)
 	case "rm":
 		return runRemove(ctx, args[1:], in, out, errOut, deps)
 	default:
@@ -364,6 +366,136 @@ func runNewPath(ctx context.Context, args []string, out io.Writer, errOut io.Wri
 	fmt.Fprintln(out, path)
 	warnStateIssue(errOut, recordWorktreeStateBestEffort(ctx, deps, repoKey, path, meta))
 	warnStateIssue(errOut, touchWorktreeStateBestEffort(ctx, deps, repoKey, path))
+	return 0
+}
+
+type gcConfig struct {
+	ttlExpired bool
+	idle       state.DurationSpec
+	idleSet    bool
+	merged     bool
+	dryRun     bool
+	force      bool
+	json       bool
+	base       string
+}
+
+type gcCandidate struct {
+	entry        listEntry
+	matchedRules []string
+	preview      git.RemovalPreview
+	hasPreview   bool
+}
+
+func runGC(ctx context.Context, args []string, out io.Writer, errOut io.Writer, deps Deps) int {
+	cfg, err := parseGCArgs(args)
+	if err != nil {
+		return writeCommandError("gc", out, errOut, cfg.json, err)
+	}
+
+	_, items, metadata, warn, err := orderedWorktrees(ctx, deps)
+	if err != nil {
+		return writeCommandError("gc", out, errOut, cfg.json, err)
+	}
+	if !cfg.json {
+		warnStateIssue(errOut, warn)
+	}
+
+	now := time.Now()
+	entries := decorateListEntries(items, metadata)
+	baseBranch := cfg.base
+	candidates := make([]gcCandidate, 0, len(entries))
+	for _, entry := range entries {
+		candidate := gcCandidate{entry: entry}
+		if cfg.ttlExpired && ttlExpired(entry.meta, now) {
+			candidate.matchedRules = append(candidate.matchedRules, "ttl_expired")
+		}
+		if cfg.idleSet && idleExpired(entry.meta, cfg.idle, now) {
+			candidate.matchedRules = append(candidate.matchedRules, "idle")
+		}
+		if cfg.merged && entry.item.BranchRef != "" {
+			if baseBranch == "" {
+				baseBranch, err = deps.DefaultBranch(ctx)
+				if err != nil {
+					return writeCommandError("gc", out, errOut, cfg.json, err)
+				}
+			}
+			preview, previewErr := deps.PreviewRemoval(ctx, entry.item, baseBranch)
+			if previewErr != nil {
+				return writeCommandError("gc", out, errOut, cfg.json, previewErr)
+			}
+			candidate.preview = preview
+			candidate.hasPreview = true
+			if preview.BranchMerged {
+				candidate.matchedRules = append(candidate.matchedRules, "merged")
+			}
+		}
+		if len(candidate.matchedRules) > 0 {
+			candidates = append(candidates, candidate)
+		}
+	}
+
+	if cfg.dryRun {
+		return writeJSONSuccess(out, "gc", gcJSONPayload(candidates, nil))
+	}
+
+	results := make([]gcResultItem, 0, len(candidates))
+	for _, candidate := range candidates {
+		item := candidate.entry.item
+		if item.IsCurrent {
+			results = append(results, gcResultItem{
+				Path:         item.Path,
+				Branch:       item.BranchLabel,
+				MatchedRules: candidate.matchedRules,
+				Action:       "skipped",
+				Reason:       "active",
+			})
+			continue
+		}
+
+		preview := candidate.preview
+		if !candidate.hasPreview && item.BranchRef != "" {
+			if baseBranch == "" {
+				baseBranch, err = deps.DefaultBranch(ctx)
+				if err != nil {
+					return writeCommandError("gc", out, errOut, cfg.json, err)
+				}
+			}
+			preview, err = deps.PreviewRemoval(ctx, item, baseBranch)
+			if err != nil {
+				return writeCommandError("gc", out, errOut, cfg.json, err)
+			}
+		}
+		if preview.Dirty && !cfg.force {
+			results = append(results, gcResultItem{
+				Path:         item.Path,
+				Branch:       item.BranchLabel,
+				MatchedRules: candidate.matchedRules,
+				Action:       "skipped",
+				Reason:       "dirty",
+			})
+			continue
+		}
+
+		removeResult, removeErr := deps.RemoveWorktree(ctx, item, git.RemoveOptions{
+			BaseBranch: baseBranch,
+			Force:      cfg.force,
+		})
+		if removeErr != nil {
+			return writeCommandError("gc", out, errOut, cfg.json, removeErr)
+		}
+		results = append(results, gcResultItem{
+			Path:         removeResult.WorktreePath,
+			Branch:       removeResult.Branch,
+			MatchedRules: candidate.matchedRules,
+			Action:       "removed",
+		})
+	}
+
+	if cfg.json {
+		return writeJSONSuccess(out, "gc", gcJSONPayload(candidates, results))
+	}
+	writeGCHuman(out, results)
 	return 0
 }
 
@@ -624,6 +756,59 @@ func parseNewPathArgs(args []string) (newPathConfig, error) {
 	return cfg, nil
 }
 
+func parseGCArgs(args []string) (gcConfig, error) {
+	var cfg gcConfig
+	for i := 0; i < len(args); i++ {
+		switch arg := args[i]; {
+		case arg == "--ttl-expired":
+			cfg.ttlExpired = true
+		case arg == "--merged":
+			cfg.merged = true
+		case arg == "--dry-run":
+			cfg.dryRun = true
+		case arg == "--force":
+			cfg.force = true
+		case arg == "--json":
+			cfg.json = true
+		case arg == "--idle":
+			if i+1 >= len(args) {
+				return cfg, appError{Code: "INVALID_ARGUMENTS", Message: "missing value for --idle", ExitCode: 2}
+			}
+			i++
+			spec, err := state.ParseHumanDuration(args[i])
+			if err != nil {
+				return cfg, appError{Code: "INVALID_DURATION", Message: err.Error(), ExitCode: 2}
+			}
+			cfg.idle = spec
+			cfg.idleSet = true
+		case strings.HasPrefix(arg, "--idle="):
+			spec, err := state.ParseHumanDuration(strings.TrimPrefix(arg, "--idle="))
+			if err != nil {
+				return cfg, appError{Code: "INVALID_DURATION", Message: err.Error(), ExitCode: 2}
+			}
+			cfg.idle = spec
+			cfg.idleSet = true
+		case arg == "--base":
+			if i+1 >= len(args) {
+				return cfg, appError{Code: "INVALID_ARGUMENTS", Message: "missing value for --base", ExitCode: 2}
+			}
+			i++
+			cfg.base = args[i]
+		case strings.HasPrefix(arg, "--base="):
+			cfg.base = strings.TrimPrefix(arg, "--base=")
+		case strings.HasPrefix(arg, "-"):
+			return cfg, appError{Code: "INVALID_ARGUMENTS", Message: fmt.Sprintf("unknown option: %s", arg), ExitCode: 2}
+		default:
+			return cfg, appError{Code: "INVALID_ARGUMENTS", Message: fmt.Sprintf("unexpected extra arguments: %s", strings.Join(args[i:], " ")), ExitCode: 2}
+		}
+	}
+
+	if !cfg.ttlExpired && !cfg.idleSet && !cfg.merged {
+		return cfg, appError{Code: "GC_RULE_REQUIRED", Message: "at least one gc rule is required", ExitCode: 2}
+	}
+	return cfg, nil
+}
+
 func parseListFilter(expr string) (listFilter, error) {
 	switch {
 	case expr == "dirty":
@@ -649,6 +834,24 @@ func parseListFilter(expr string) (listFilter, error) {
 	default:
 		return listFilter{}, appError{Code: "INVALID_FILTER", Message: fmt.Sprintf("invalid filter: %s", expr), ExitCode: 2}
 	}
+}
+
+func ttlExpired(meta state.WorktreeMetadata, now time.Time) bool {
+	if meta.CreatedAt == 0 || meta.TTL == "" {
+		return false
+	}
+	spec, err := state.ParseHumanDuration(meta.TTL)
+	if err != nil {
+		return false
+	}
+	return !time.Unix(0, meta.CreatedAt).Add(spec.Value).After(now)
+}
+
+func idleExpired(meta state.WorktreeMetadata, spec state.DurationSpec, now time.Time) bool {
+	if meta.LastUsedAt == 0 {
+		return false
+	}
+	return now.Sub(time.Unix(0, meta.LastUsedAt)) >= spec.Value
 }
 
 func decorateListEntries(items []worktree.Worktree, metadata map[string]state.WorktreeMetadata) []listEntry {
@@ -708,6 +911,66 @@ func matchesAllListFilters(entry listEntry, filters []listFilter, now time.Time)
 		}
 	}
 	return true
+}
+
+type gcResultItem struct {
+	Path         string   `json:"path"`
+	Branch       string   `json:"branch"`
+	MatchedRules []string `json:"matched_rules"`
+	Action       string   `json:"action"`
+	Reason       string   `json:"reason,omitempty"`
+}
+
+func gcJSONPayload(candidates []gcCandidate, results []gcResultItem) map[string]any {
+	if results == nil {
+		items := make([]gcResultItem, 0, len(candidates))
+		for _, candidate := range candidates {
+			items = append(items, gcResultItem{
+				Path:         candidate.entry.item.Path,
+				Branch:       candidate.entry.item.BranchLabel,
+				MatchedRules: candidate.matchedRules,
+				Action:       "dry_run",
+			})
+		}
+		return map[string]any{
+			"summary": map[string]any{
+				"matched": len(candidates),
+				"removed": 0,
+				"skipped": 0,
+			},
+			"items": items,
+		}
+	}
+
+	removed := 0
+	skipped := 0
+	for _, item := range results {
+		switch item.Action {
+		case "removed":
+			removed++
+		case "skipped":
+			skipped++
+		}
+	}
+	return map[string]any{
+		"summary": map[string]any{
+			"matched": len(candidates),
+			"removed": removed,
+			"skipped": skipped,
+		},
+		"items": results,
+	}
+}
+
+func writeGCHuman(out io.Writer, results []gcResultItem) {
+	for _, item := range results {
+		switch item.Action {
+		case "removed":
+			fmt.Fprintf(out, "removed %s\n", item.Path)
+		case "skipped":
+			fmt.Fprintf(out, "skipped %s (%s)\n", item.Path, item.Reason)
+		}
+	}
 }
 
 func selectRemovalCandidateNonInteractive(allItems []worktree.Worktree, candidates []removalCandidate, target string) (removalCandidate, error) {

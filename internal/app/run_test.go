@@ -694,6 +694,236 @@ func TestRunListRejectsInvalidFilter(t *testing.T) {
 	}
 }
 
+func TestRunGCRequiresAtLeastOneRule(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := Run(context.Background(), []string{"gc", "--json"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
+
+	if code != 2 {
+		t.Fatalf("expected exit code 2, got %d", code)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+
+	envelope := decodeEnvelope(t, stdout.String())
+	if envelope.OK {
+		t.Fatalf("expected error envelope, got %#v", envelope)
+	}
+	if envelope.Command != "gc" {
+		t.Fatalf("expected command gc, got %#v", envelope)
+	}
+	if envelope.Error == nil || envelope.Error.Code != "GC_RULE_REQUIRED" {
+		t.Fatalf("unexpected error payload: %#v", envelope.Error)
+	}
+}
+
+func TestRunGCDryRunJSONSummarizesMatches(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		repoKey: "/repo/.git",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", BranchRef: "refs/heads/alpha"},
+			{Path: "/repo/.worktrees/beta", BranchLabel: "beta", BranchRef: "refs/heads/beta"},
+		},
+		metadata: map[string]map[string]state.WorktreeMetadata{
+			"/repo/.git": {
+				"/repo/.worktrees/alpha": {CreatedAt: 1, TTL: "24h"},
+				"/repo/.worktrees/beta":  {LastUsedAt: 1},
+			},
+		},
+	}
+
+	code := Run(context.Background(), []string{"gc", "--json", "--dry-run", "--ttl-expired", "--idle", "7d"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+
+	envelope := decodeEnvelope(t, stdout.String())
+	var data struct {
+		Summary struct {
+			Matched int `json:"matched"`
+			Removed int `json:"removed"`
+			Skipped int `json:"skipped"`
+		} `json:"summary"`
+		Items []struct {
+			Path         string   `json:"path"`
+			MatchedRules []string `json:"matched_rules"`
+			Action       string   `json:"action"`
+		} `json:"items"`
+	}
+	decodeEnvelopeData(t, envelope, &data)
+
+	if data.Summary.Matched != 2 || data.Summary.Removed != 0 || data.Summary.Skipped != 0 {
+		t.Fatalf("unexpected summary: %#v", data.Summary)
+	}
+	if len(data.Items) != 2 {
+		t.Fatalf("expected two dry-run items, got %#v", data.Items)
+	}
+}
+
+func TestRunGCSkipsDirtyAndActiveWorktrees(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	removed := &removeCall{}
+	deps := fakeDeps{
+		repoKey:       "/repo/.git",
+		defaultBranch: "main",
+		removed:       removed,
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Path: "/repo/.worktrees/dirty", BranchLabel: "dirty", BranchRef: "refs/heads/dirty", IsDirty: true},
+			{Path: "/repo/.worktrees/clean", BranchLabel: "clean", BranchRef: "refs/heads/clean"},
+		},
+		metadata: map[string]map[string]state.WorktreeMetadata{
+			"/repo/.git": {
+				"/repo":                  {CreatedAt: 1, TTL: "24h"},
+				"/repo/.worktrees/dirty": {CreatedAt: 1, TTL: "24h"},
+				"/repo/.worktrees/clean": {CreatedAt: 1, TTL: "24h"},
+			},
+		},
+		previews: map[string]git.RemovalPreview{
+			"/repo/.worktrees/dirty": {
+				Worktree:   worktree.Worktree{Path: "/repo/.worktrees/dirty", BranchLabel: "dirty", BranchRef: "refs/heads/dirty"},
+				BaseBranch: "main",
+				Dirty:      true,
+			},
+			"/repo/.worktrees/clean": {
+				Worktree:     worktree.Worktree{Path: "/repo/.worktrees/clean", BranchLabel: "clean", BranchRef: "refs/heads/clean"},
+				BaseBranch:   "main",
+				BranchMerged: true,
+				DeleteBranch: true,
+			},
+		},
+		removeResult: git.RemoveResult{
+			WorktreePath:    "/repo/.worktrees/clean",
+			Branch:          "clean",
+			BaseBranch:      "main",
+			RemovedWorktree: true,
+			DeletedBranch:   true,
+		},
+	}
+
+	code := Run(context.Background(), []string{"gc", "--json", "--ttl-expired"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if removed.item.Path != "/repo/.worktrees/clean" {
+		t.Fatalf("expected only clean worktree to be removed, got %#v", removed)
+	}
+
+	envelope := decodeEnvelope(t, stdout.String())
+	var data struct {
+		Summary struct {
+			Matched int `json:"matched"`
+			Removed int `json:"removed"`
+			Skipped int `json:"skipped"`
+		} `json:"summary"`
+		Items []struct {
+			Path   string `json:"path"`
+			Action string `json:"action"`
+			Reason string `json:"reason"`
+		} `json:"items"`
+	}
+	decodeEnvelopeData(t, envelope, &data)
+
+	if data.Summary.Matched != 3 || data.Summary.Removed != 1 || data.Summary.Skipped != 2 {
+		t.Fatalf("unexpected summary: %#v", data.Summary)
+	}
+}
+
+func TestRunGCForceAllowsDirtyRemoval(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	removed := &removeCall{}
+	deps := fakeDeps{
+		repoKey:       "/repo/.git",
+		defaultBranch: "main",
+		removed:       removed,
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Path: "/repo/.worktrees/dirty", BranchLabel: "dirty", BranchRef: "refs/heads/dirty"},
+		},
+		metadata: map[string]map[string]state.WorktreeMetadata{
+			"/repo/.git": {
+				"/repo/.worktrees/dirty": {CreatedAt: 1, TTL: "24h"},
+			},
+		},
+		previews: map[string]git.RemovalPreview{
+			"/repo/.worktrees/dirty": {
+				Worktree:     worktree.Worktree{Path: "/repo/.worktrees/dirty", BranchLabel: "dirty", BranchRef: "refs/heads/dirty"},
+				BaseBranch:   "main",
+				Dirty:        true,
+				BranchMerged: true,
+				DeleteBranch: true,
+			},
+		},
+		removeResult: git.RemoveResult{
+			WorktreePath:    "/repo/.worktrees/dirty",
+			Branch:          "dirty",
+			BaseBranch:      "main",
+			RemovedWorktree: true,
+			DeletedBranch:   true,
+		},
+	}
+
+	code := Run(context.Background(), []string{"gc", "--json", "--ttl-expired", "--force"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if removed.item.Path != "/repo/.worktrees/dirty" || !removed.opts.Force {
+		t.Fatalf("expected forced removal call, got %#v", removed)
+	}
+}
+
+func TestRunGCMergedUsesBaseBranchResolution(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	removed := &removeCall{}
+	deps := fakeDeps{
+		repoKey:       "/repo/.git",
+		defaultBranch: "main",
+		removed:       removed,
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", BranchRef: "refs/heads/alpha"},
+		},
+		previews: map[string]git.RemovalPreview{
+			"/repo/.worktrees/alpha": {
+				Worktree:     worktree.Worktree{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", BranchRef: "refs/heads/alpha"},
+				BaseBranch:   "main",
+				BranchMerged: true,
+				DeleteBranch: true,
+			},
+		},
+		removeResult: git.RemoveResult{
+			WorktreePath:    "/repo/.worktrees/alpha",
+			Branch:          "alpha",
+			BaseBranch:      "main",
+			RemovedWorktree: true,
+			DeletedBranch:   true,
+		},
+	}
+
+	code := Run(context.Background(), []string{"gc", "--json", "--merged"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if removed.opts.BaseBranch != "main" {
+		t.Fatalf("expected default base branch to be used, got %#v", removed)
+	}
+}
+
 func TestRunRmSelectsCandidateConfirmsAndPrintsHumanResult(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
