@@ -45,15 +45,24 @@ For the fastest path, install `fzf`. If `fzf` is not available, `ww` automatical
 
 Use `ww-helper` for programmatic calls. `ww` stays shell-first for humans and still changes your current shell directory for `switch` and `new`.
 
-Phase 1 machine-readable commands:
+Phase 2 machine-readable commands:
 
 ```bash
 ww-helper list --json
-ww-helper new-path --json feat-demo
+ww-helper new-path --json --label agent:claude-code --ttl 24h feat-demo
+ww-helper gc --ttl-expired --dry-run --json
 ww-helper rm --json --non-interactive feat-demo
 ```
 
-`ww-helper rm --json` now returns a JSON envelope with `ok`, `command`, and `data`/`error`. This is a breaking change from the older flat JSON object.
+Human-facing metadata flow:
+
+```bash
+ww new feat-a --label agent:claude-code --ttl 24h
+ww list --filter label=agent:claude-code --verbose
+ww gc --ttl-expired --dry-run
+```
+
+`ww-helper rm --json` still returns the Phase 1 JSON envelope with `ok`, `command`, and `data`/`error`. `gc` now uses the same envelope shape. `gc` requires at least one explicit selector such as `--ttl-expired`, `--idle 7d`, or `--merged`.
 
 ## Reference
 

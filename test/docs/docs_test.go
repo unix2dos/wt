@@ -32,6 +32,12 @@ func TestPagesDemoContract(t *testing.T) {
 	if !strings.Contains(readme, "ww-helper list --json") {
 		t.Fatalf("expected README to show ww-helper json usage")
 	}
+	if !strings.Contains(readme, "ww new feat-a --label agent:claude-code --ttl 24h") {
+		t.Fatalf("expected README to document metadata-aware worktree creation")
+	}
+	if !strings.Contains(readme, "ww gc --ttl-expired --dry-run") {
+		t.Fatalf("expected README to document explicit gc usage")
+	}
 	if strings.Contains(readme, "### Install From Source") {
 		t.Fatalf("expected README to stay in landing-page mode, not inline the full reference")
 	}
@@ -45,6 +51,10 @@ func TestPagesDemoContract(t *testing.T) {
 		"`ww help` or `ww --help` prints the command summary.",
 		"### For AI Agents",
 		"ww-helper rm --json --non-interactive feat-a",
+		"ww-helper new-path --json --label agent:claude-code --ttl 24h feat-a",
+		"ww list --filter label=agent:claude-code --verbose",
+		"ww gc --ttl-expired --idle 7d --dry-run --json",
+		"gc requires at least one explicit selector",
 		"#### Breaking Change",
 	} {
 		if !strings.Contains(reference, snippet) {

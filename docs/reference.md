@@ -90,11 +90,12 @@ If you installed into Bash, reload `~/.bashrc` instead.
 
 Use `ww-helper` for machine-readable workflows. `ww` remains the human shell entrypoint and still treats `switch` / `new` as directory-changing commands.
 
-Phase 1 programmatic commands:
+Phase 2 programmatic commands:
 
 ```bash
 ww-helper list --json
-ww-helper new-path --json feat-a
+ww-helper new-path --json --label agent:claude-code --ttl 24h feat-a
+ww-helper gc --ttl-expired --idle 7d --dry-run --json
 ww-helper rm --json --non-interactive feat-a
 ```
 
@@ -135,13 +136,37 @@ Returns an array of worktrees with:
 - `dirty`
 - `active`
 - `created_at`
+- `last_used_at`
+- `label`
+- `ttl`
 
-#### `ww-helper new-path --json <name>`
+#### `ww-helper new-path --json --label agent:claude-code --ttl 24h feat-a`
 
 Returns:
 
 - `worktree_path`
 - `branch`
+
+`label` is stored as a single free-text string. `ttl` is fixed from creation time; Phase 2 does not include a metadata editing command.
+
+#### `ww-helper gc --ttl-expired --idle 7d --dry-run --json`
+
+`gc` requires at least one explicit selector. Supported selectors are:
+
+- `--ttl-expired`
+- `--idle <duration>`
+- `--merged`
+
+`gc requires at least one explicit selector`; a bare `ww-helper gc --json` returns `GC_RULE_REQUIRED` with exit code `2`.
+
+Dry-run responses use the same envelope and return:
+
+- `summary.matched`
+- `summary.removed`
+- `summary.skipped`
+- `items[].matched_rules`
+- `items[].action`
+- `items[].reason` when skipped
 
 #### `ww-helper rm --json --non-interactive <target>`
 
@@ -194,19 +219,54 @@ Exact name matches win. If no exact match exists, `ww` falls back to a unique pr
 
 ```bash
 ww list
+ww list --filter label=agent:claude-code --verbose
 ```
 
 This prints the current worktree table without changing your shell directory.
 
 Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, and the status column uses the same `ACTIVE` / `ACTIVE*` / `DIRTY` markers as the interactive selector.
 
+Available Phase 2 filters:
+
+- `--filter dirty`
+- `--filter label=agent:claude-code`
+- `--filter label~agent`
+- `--filter stale=7d`
+
+`--verbose` appends metadata such as `label`, `ttl`, and `last_used_at` to the human-readable output.
+
 ### New
 
 ```bash
 ww new feat-a
+ww new feat-a --label agent:claude-code --ttl 24h
 ```
 
 This creates branch `feat-a` from the current `HEAD` in `./.worktrees/feat-a`, then switches into it.
+
+Phase 2 stores `created_at` for new worktrees in `state-v2.json`. If you pass `--ttl`, expiry is computed as `created_at + ttl` and does not slide on later access.
+
+### GC
+
+```bash
+ww gc --ttl-expired --dry-run
+ww gc --idle 7d
+ww gc --merged
+ww gc --ttl-expired --idle 7d --dry-run --json
+```
+
+`gc` evaluates the union of the selected rules:
+
+- TTL-expired worktrees
+- idle worktrees older than the requested threshold
+- worktrees whose branch is already merged into the effective base branch
+
+Safety rules:
+
+- active worktrees are always skipped
+- dirty worktrees are skipped unless you pass `--force`
+- worktrees without TTL are ignored by `--ttl-expired`
+- `gc` is manual only; there is no automatic background cleanup
 
 ### Remove
 
