@@ -311,6 +311,11 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 	for _, entry := range entries {
 		item := entry.item
 		fmt.Fprintf(out, "[%d] %-6s %s %s", item.Index, ui.StatusLabel(item), item.BranchLabel, item.Path)
+		taskValue := entry.meta.Label
+		if taskValue == "" {
+			taskValue = "unlabeled"
+		}
+		fmt.Fprintf(out, " task=%s", taskValue)
 		if cfg.verbose {
 			if entry.meta.Label != "" {
 				fmt.Fprintf(out, " label=%s", entry.meta.Label)

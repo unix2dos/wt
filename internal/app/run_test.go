@@ -706,6 +706,40 @@ func TestRunListVerboseShowsLabelAndTTL(t *testing.T) {
 	}
 }
 
+func TestRunListShowsTaskIdentityByDefault(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		repoKey: "/repo/.git",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", CreatedAt: 20},
+			{Path: "/repo/.worktrees/beta", BranchLabel: "beta", CreatedAt: 30},
+		},
+		metadata: map[string]map[string]state.WorktreeMetadata{
+			"/repo/.git": {
+				"/repo/.worktrees/alpha": {
+					Label: "task:fix-login",
+				},
+			},
+		},
+	}
+
+	code := Run(context.Background(), []string{"list"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if !strings.Contains(stdout.String(), "task=task:fix-login") {
+		t.Fatalf("expected labeled task marker in list output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "task=unlabeled") {
+		t.Fatalf("expected unlabeled task marker in list output, got %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
 func TestRunListFiltersByLabelAndStale(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
