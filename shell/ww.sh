@@ -3,6 +3,7 @@ ww_print_help() {
 Usage:
   ww [switch] [<index>|<name>]
   ww list
+  ww check
   ww new <name>
   ww rm [--force] [--base <branch>] [<name>]
   ww help
@@ -10,6 +11,7 @@ Usage:
 Commands:
   switch  Select a worktree and change into it. Default when omitted.
   list    Print worktrees without changing directory.
+  check   Print the current worktree safety summary.
   new     Create a worktree under ./.worktrees/<name> and enter it.
   rm      Remove a worktree and delete its branch only when merged.
   help    Show this help.
@@ -21,6 +23,7 @@ Notes:
 Examples:
   ww
   ww 2
+  ww check
   ww switch feat-a
   ww new feat-demo
   ww rm feat-demo
@@ -64,6 +67,11 @@ ww() {
     list)
       shift
       "$ww_helper_bin" list "$@"
+      return $?
+      ;;
+    check)
+      shift
+      "$ww_helper_bin" check "$@"
       return $?
       ;;
     rm)

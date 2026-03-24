@@ -148,6 +148,8 @@ func Run(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut
 		return runNewPath(ctx, args[1:], out, errOut, deps)
 	case "list":
 		return runList(ctx, args[1:], out, errOut, deps)
+	case "check":
+		return runCheck(ctx, args[1:], out, errOut, deps)
 	case "gc":
 		return runGC(ctx, args[1:], out, errOut, deps)
 	case "rm":

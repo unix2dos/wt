@@ -541,15 +541,53 @@ func TestWwRmPassThroughWithoutChangingDirectory(t *testing.T) {
 	}
 }
 
+func TestWwCheckPrintsOutputWithoutChangingDirectory(t *testing.T) {
+	home := t.TempDir()
+	rcPath := filepath.Join(home, ".zshrc")
+	if err := os.WriteFile(rcPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("write rc file: %v", err)
+	}
+
+	runInstall(t, home)
+
+	origin := t.TempDir()
+	checkOutput := "Path: /repo/.worktrees/alpha"
+	if err := writeExecutableScript(filepath.Join(home, ".local", "bin", "ww-helper"), fmt.Sprintf("#!/usr/bin/env bash\n[ \"$1\" = \"check\" ] || exit 9\nprintf '%%s\\n' %q\n", checkOutput)); err != nil {
+		t.Fatalf("write fake ww-helper: %v", err)
+	}
+
+	out := runShell(t, home, fmt.Sprintf(`
+		cd %q
+		source %q
+		ww check
+		pwd
+	`, origin, rcPath))
+
+	if !strings.Contains(out, checkOutput) {
+		t.Fatalf("expected check output, got %q", out)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if got := lines[len(lines)-1]; got != origin {
+		t.Fatalf("expected shell to stay in %q, got %q", origin, got)
+	}
+}
+
 func runInstall(t *testing.T, home string, args ...string) string {
 	t.Helper()
 
 	cmdArgs := append([]string{"install.sh"}, args...)
 	cmd := exec.Command("bash", cmdArgs...)
 	cmd.Dir = projectRoot(t)
+	goPath := filepath.Join(home, "go")
+	goCache := filepath.Join(home, ".cache", "go-build")
+	goModCache := filepath.Join(goPath, "pkg", "mod")
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
 		"SHELL=/bin/zsh",
+		"GOPATH="+goPath,
+		"GOCACHE="+goCache,
+		"GOMODCACHE="+goModCache,
+		"GOFLAGS=-modcacherw",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -565,9 +603,16 @@ func runUninstall(t *testing.T, home string, args ...string) {
 	cmdArgs := append([]string{"uninstall.sh"}, args...)
 	cmd := exec.Command("bash", cmdArgs...)
 	cmd.Dir = projectRoot(t)
+	goPath := filepath.Join(home, "go")
+	goCache := filepath.Join(home, ".cache", "go-build")
+	goModCache := filepath.Join(goPath, "pkg", "mod")
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
 		"SHELL=/bin/zsh",
+		"GOPATH="+goPath,
+		"GOCACHE="+goCache,
+		"GOMODCACHE="+goModCache,
+		"GOFLAGS=-modcacherw",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
