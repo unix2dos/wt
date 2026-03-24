@@ -2,3 +2,4 @@ dist/
 .worktrees/
 .tools/
 **.DS_Store
+docs/superpowers/
