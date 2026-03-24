@@ -248,6 +248,9 @@ func TestWwHelpDoesNotCd(t *testing.T) {
 	if !strings.Contains(out, "\nCommands:\n") {
 		t.Fatalf("expected Commands section in help output, got %q", out)
 	}
+	if !strings.Contains(out, "\n  ww check\n") {
+		t.Fatalf("expected help to mention ww check, got %q", out)
+	}
 	if !strings.Contains(out, "\nExamples:\n") {
 		t.Fatalf("expected Examples section in help output, got %q", out)
 	}

@@ -1,6 +1,6 @@
 # ww Reference
 
-Use [the README](../README.md) for the product overview and demo. This page keeps the full install, usage, and release reference.
+Use [the README](../README.md) for the product overview and demo. This page keeps the full install, usage, command, and release reference.
 
 ## Install
 
@@ -81,6 +81,7 @@ If you installed into Bash, reload `~/.bashrc` instead.
 
 - `ww` or `ww switch` selects a worktree and switches into it.
 - `ww list` prints worktrees without changing directory.
+- `ww check` prints the current worktree safety summary without changing directory.
 - `ww new <name>` creates a new worktree under `./.worktrees/<name>` and switches into it.
 - `ww rm [<name>]` removes a worktree and deletes its branch only when that branch is already merged into the effective base branch.
 - `ww help` or `ww --help` prints the command summary.
@@ -90,7 +91,7 @@ If you installed into Bash, reload `~/.bashrc` instead.
 
 Use `ww-helper` for machine-readable workflows. `ww` remains the human shell entrypoint and still treats `switch` / `new` as directory-changing commands.
 
-Phase 2 programmatic commands:
+Current programmatic commands:
 
 ```bash
 ww-helper list --json
@@ -99,7 +100,7 @@ ww-helper gc --ttl-expired --idle 7d --dry-run --json
 ww-helper rm --json --non-interactive feat-a
 ```
 
-`ww-helper switch-path` remains a path-printing helper. Phase 1 does not add a new `switch --json` contract; agents should call `switch-path` directly when they need a target path.
+`ww-helper switch-path` remains a path-printing helper. `ww check` is human-readable only in this release; agents should keep using `switch-path` and the JSON subcommands above for machine-readable flows.
 
 #### JSON Envelope
 
@@ -147,7 +148,15 @@ Returns:
 - `worktree_path`
 - `branch`
 
-`label` is stored as a single free-text string. `ttl` is fixed from creation time; Phase 2 does not include a metadata editing command.
+`label` is stored as a single free-text string. `ttl` is fixed from creation time; this release does not include a metadata editing command.
+
+When `label` is present, `ww` also generates a private task note for that worktree under Git's per-worktree admin directory via:
+
+```bash
+git -C <worktree> rev-parse --git-path ww/task-note.md
+```
+
+That task note is not written into tracked files.
 
 #### `ww-helper gc --ttl-expired --idle 7d --dry-run --json`
 
@@ -224,7 +233,7 @@ ww list --filter label=agent:claude-code --verbose
 
 This prints the current worktree table without changing your shell directory.
 
-Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, and the status column uses the same `ACTIVE` / `ACTIVE*` / `DIRTY` markers as the interactive selector.
+Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, the status column uses the same `ACTIVE` / `ACTIVE*` / `DIRTY` markers as the interactive selector, and the default human-readable output includes `task=<label>` or `task=unlabeled`.
 
 Available Phase 2 filters:
 
@@ -235,6 +244,20 @@ Available Phase 2 filters:
 
 `--verbose` appends metadata such as `label`, `ttl`, and `last_used_at` to the human-readable output.
 
+### Check
+
+```bash
+ww check
+```
+
+`ww check` prints the current worktree path, branch, task label, dirty state, and task intent when a task note is available.
+
+Warnings stay human-readable and conservative:
+
+- detached worktrees are called out explicitly
+- unlabeled worktrees are called out explicitly
+- missing task notes warn instead of failing
+
 ### New
 
 ```bash
@@ -244,7 +267,9 @@ ww new feat-a --label agent:claude-code --ttl 24h
 
 This creates branch `feat-a` from the current `HEAD` in `./.worktrees/feat-a`, then switches into it.
 
-Phase 2 stores `created_at` for new worktrees in `state-v2.json`. If you pass `--ttl`, expiry is computed as `created_at + ttl` and does not slide on later access.
+This release stores `created_at` for new worktrees in `state-v2.json`. If you pass `--ttl`, expiry is computed as `created_at + ttl` and does not slide on later access.
+
+When you also pass `--label`, `ww` creates a private task note scaffold for that worktree so later `ww check` and removal summaries can restore task context.
 
 ### GC
 
@@ -278,6 +303,8 @@ ww rm --base release/1.0 feat-a
 ```
 
 `ww rm` groups removable worktrees by deletion risk, prints a plain-language summary card after selection, removes the worktree, and only deletes the branch when it is already merged into the effective base branch. Dirty worktrees stop before confirmation unless you explicitly rerun with `--force`.
+
+When task metadata exists, the summary card also includes task label, task intent, and weak-boundary warnings such as detached or unlabeled state.
 
 ### Typical Flow
 

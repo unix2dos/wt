@@ -1522,12 +1522,14 @@ func warnStateIssue(errOut io.Writer, err error) {
 }
 
 func printHelperHelp(out io.Writer) {
-	fmt.Fprintln(out, "Usage: ww-helper [switch-path|list|new-path|rm|help|--help]")
+	fmt.Fprintln(out, "Usage: ww-helper [switch-path|list|check|new-path|gc|rm|help|--help]")
 	fmt.Fprintln(out, "")
 	fmt.Fprintln(out, "switch-path prints the selected git worktree path.")
 	fmt.Fprintln(out, "Interactive switch uses fzf when available, otherwise the built-in selector.")
 	fmt.Fprintln(out, "list prints the current worktree table.")
+	fmt.Fprintln(out, "check prints the current worktree safety summary.")
 	fmt.Fprintln(out, "new-path creates a worktree and prints its path.")
+	fmt.Fprintln(out, "gc evaluates explicit cleanup rules and prints matched worktrees.")
 	fmt.Fprintln(out, "rm removes a worktree and optionally deletes its merged branch.")
 	fmt.Fprintln(out, "help prints this command summary.")
 }

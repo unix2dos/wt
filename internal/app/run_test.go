@@ -37,6 +37,9 @@ func TestRunHelperHelpPrintsUsageAndExitsZero(t *testing.T) {
 	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("new-path")) {
 		t.Fatalf("expected help to mention new-path, got %q", got)
 	}
+	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("check")) {
+		t.Fatalf("expected help to mention check, got %q", got)
+	}
 	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("rm")) {
 		t.Fatalf("expected help to mention rm, got %q", got)
 	}
@@ -455,11 +458,13 @@ func TestRunNewPathJSONIncludesMetadataInputs(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	recorded := &recordWorktreeCall{}
+	notePath := filepath.Join(t.TempDir(), "git-private", "ww", "task-note.md")
 	deps := fakeDeps{
-		createPath: "/repo/.worktrees/alpha",
-		repoKey:    "/repo/.git",
-		touched:    &touchRecord{},
-		recorded:   recorded,
+		createPath:      "/repo/.worktrees/alpha",
+		repoKey:         "/repo/.git",
+		touched:         &touchRecord{},
+		recorded:        recorded,
+		worktreeGitPath: notePath,
 	}
 
 	code := Run(context.Background(), []string{"new-path", "--json", "--label", "agent:claude", "--ttl", "24h", "alpha"}, bytes.NewReader(nil), stdout, stderr, deps)

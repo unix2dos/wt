@@ -1,14 +1,14 @@
 # w+w
 
-Short click, short move — fast switch worktrees with fzf.
+Safer parallel AI coding with Git worktrees.
 
-`ww` is a shell-first Git worktree workflow for the current repository. Use the fast picker to jump into an existing branch, open a fresh worktree from where you already are, and clean up temporary branches without breaking shell flow.
+`ww` is a shell-first Git worktree workflow for the current repository. It keeps the fast switch/create/remove loop, then adds task identity and quick boundary checks so parallel work is harder to mix up.
 
 ## Demo
 
 [![ww demo](docs/assets/ww-demo.svg)](https://unix2dos.github.io/ww/)
 
-The demo follows the core loop in under half a minute:
+The demo still shows the core loop in under half a minute:
 
 - switch into an existing worktree with the `fzf` fast path
 - create a fresh branch workspace with `ww new feat-demo`
@@ -17,8 +17,10 @@ The demo follows the core loop in under half a minute:
 ## Why ww
 
 - `ww` changes the current shell directory, so switching worktrees feels like changing folders, not launching a side tool.
-- `ww` keeps the everyday loop in one command family: `ww`, `ww new`, `ww rm`.
-- `ww rm` only deletes the branch when it is already merged into the effective base branch.
+- `ww new --label ...` creates a labeled task workspace and generates a private task note for that worktree.
+- `ww list` shows task identity by default, so unlabeled worktrees stand out immediately.
+- `ww check` prints the current path, branch, task label, dirty state, and task intent when available.
+- `ww rm` explains what will be removed, what will be kept, and where the task boundary is weak before you confirm.
 
 ## Quick Start
 
@@ -29,11 +31,13 @@ curl -fsSL https://github.com/unix2dos/ww/releases/latest/download/install-relea
 source ~/.zshrc
 ```
 
-Then try the core flow inside any Git repository:
+Then try the boundary-safe loop inside any Git repository:
 
 ```bash
 ww
-ww new feat-demo
+ww new feat-demo --label task:demo
+ww list
+ww check
 ww rm feat-demo
 ```
 
@@ -45,7 +49,7 @@ For the fastest path, install `fzf`. If `fzf` is not available, `ww` automatical
 
 Use `ww-helper` for programmatic calls. `ww` stays shell-first for humans and still changes your current shell directory for `switch` and `new`.
 
-Phase 2 machine-readable commands:
+Current machine-readable commands:
 
 ```bash
 ww-helper list --json
@@ -54,19 +58,20 @@ ww-helper gc --ttl-expired --dry-run --json
 ww-helper rm --json --non-interactive feat-demo
 ```
 
-Human-facing metadata flow:
+Human-facing safety flow:
 
 ```bash
 ww new feat-a --label agent:claude-code --ttl 24h
-ww list --filter label=agent:claude-code --verbose
+ww list
+ww check
 ww gc --ttl-expired --dry-run
 ```
 
-`ww-helper rm --json` still returns the Phase 1 JSON envelope with `ok`, `command`, and `data`/`error`. `gc` now uses the same envelope shape. `gc` requires at least one explicit selector such as `--ttl-expired`, `--idle 7d`, or `--merged`.
+`ww-helper rm --json` uses the same JSON envelope shape as the other machine-readable commands. `gc` still requires at least one explicit selector such as `--ttl-expired`, `--idle 7d`, or `--merged`.
 
 ## Reference
 
-`README.md` is the landing page. Detailed install, usage, release, and command reference now live in:
+`README.md` stays in landing-page mode. Detailed install, usage, release, and command reference live in:
 
 - [Reference Guide](docs/reference.md)
 - [Demo Script Notes](docs/demo-script.md)
