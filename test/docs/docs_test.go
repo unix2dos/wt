@@ -11,7 +11,7 @@ func TestPagesDemoContract(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 
 	readme := mustReadFile(t, filepath.Join(root, "README.md"))
-	if !strings.Contains(readme, "Fast worktree switching for safer parallel AI coding.") {
+	if !strings.Contains(readme, "Fast worktree switching for safer parallel work.") {
 		t.Fatalf("expected README landing-page value proposition")
 	}
 	if !strings.Contains(readme, "## Demo") {
@@ -32,14 +32,20 @@ func TestPagesDemoContract(t *testing.T) {
 	if !strings.Contains(readme, "ww-helper list --json") {
 		t.Fatalf("expected README to show ww-helper json usage")
 	}
-	if !strings.Contains(readme, "ww new feat-a --label agent:claude-code --ttl 24h") {
-		t.Fatalf("expected README to document metadata-aware worktree creation")
+	if !strings.Contains(readme, "ww new feat-demo") {
+		t.Fatalf("expected README to document simple worktree creation")
 	}
 	if !strings.Contains(readme, "ww check") {
 		t.Fatalf("expected README to document ww check")
 	}
-	if !strings.Contains(readme, "ww gc --ttl-expired --dry-run") {
-		t.Fatalf("expected README to document explicit gc usage")
+	if !strings.Contains(readme, "ww rm --cleanup") {
+		t.Fatalf("expected README to document human cleanup mode")
+	}
+	if strings.Contains(readme, "ww new feat-a --label agent:claude-code --ttl 24h") {
+		t.Fatalf("expected README to keep metadata flags out of the human path")
+	}
+	if strings.Contains(readme, "ww gc --ttl-expired --dry-run") {
+		t.Fatalf("expected README to stop documenting ww gc for humans")
 	}
 	if strings.Contains(readme, "### Install From Source") {
 		t.Fatalf("expected README to stay in landing-page mode, not inline the full reference")
@@ -54,16 +60,24 @@ func TestPagesDemoContract(t *testing.T) {
 		"`ww help` or `ww --help` prints the command summary.",
 		"### For AI Agents",
 		"ww check",
+		"ww rm --cleanup",
 		"ww-helper rm --json --non-interactive feat-a",
 		"ww-helper new-path --json --label agent:claude-code --ttl 24h feat-a",
-		"git -C <worktree> rev-parse --git-path ww/task-note.md",
-		"ww list --filter label=agent:claude-code --verbose",
-		"ww gc --ttl-expired --idle 7d --dry-run --json",
-		"gc requires at least one explicit selector",
+		"ww-helper gc --ttl-expired --idle 7d --dry-run --json",
 		"#### Breaking Change",
 	} {
 		if !strings.Contains(reference, snippet) {
 			t.Fatalf("expected reference doc to contain %q", snippet)
+		}
+	}
+	for _, forbidden := range []string{
+		"ww new feat-a --label agent:claude-code --ttl 24h",
+		"ww gc --ttl-expired --dry-run",
+		"ww gc --idle 7d",
+		"ww gc --merged",
+	} {
+		if strings.Contains(reference, forbidden) {
+			t.Fatalf("expected reference doc to stop teaching human-facing %q", forbidden)
 		}
 	}
 

@@ -389,6 +389,105 @@ func TestWwNewChangesDirectoryOnSuccess(t *testing.T) {
 	}
 }
 
+func TestWwNewRejectsHelperOnlyLabelFlag(t *testing.T) {
+	home := t.TempDir()
+	rcPath := filepath.Join(home, ".zshrc")
+	if err := os.WriteFile(rcPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("write rc file: %v", err)
+	}
+
+	runInstall(t, home)
+
+	origin := t.TempDir()
+	marker := filepath.Join(home, "helper-invoked")
+	script := fmt.Sprintf("#!/usr/bin/env bash\ntouch %q\nexit 99\n", marker)
+	if err := writeExecutableScript(filepath.Join(home, ".local", "bin", "ww-helper"), script); err != nil {
+		t.Fatalf("write fake ww-helper: %v", err)
+	}
+
+	out, err := runShellResult(t, home, fmt.Sprintf(`
+		cd %q
+		source %q
+		ww new --label task:demo feature-x
+	`, origin, rcPath))
+
+	if err == nil {
+		t.Fatalf("expected ww new --label to fail")
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatalf("expected shell guard to stop before ww-helper, marker err=%v", statErr)
+	}
+	if !strings.Contains(out, "ww-helper new-path") {
+		t.Fatalf("expected migration guidance, got %q", out)
+	}
+}
+
+func TestWwNewRejectsHelperOnlyTTLFlag(t *testing.T) {
+	home := t.TempDir()
+	rcPath := filepath.Join(home, ".zshrc")
+	if err := os.WriteFile(rcPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("write rc file: %v", err)
+	}
+
+	runInstall(t, home)
+
+	origin := t.TempDir()
+	marker := filepath.Join(home, "helper-invoked")
+	script := fmt.Sprintf("#!/usr/bin/env bash\ntouch %q\nexit 99\n", marker)
+	if err := writeExecutableScript(filepath.Join(home, ".local", "bin", "ww-helper"), script); err != nil {
+		t.Fatalf("write fake ww-helper: %v", err)
+	}
+
+	out, err := runShellResult(t, home, fmt.Sprintf(`
+		cd %q
+		source %q
+		ww new --ttl 24h feature-x
+	`, origin, rcPath))
+
+	if err == nil {
+		t.Fatalf("expected ww new --ttl to fail")
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatalf("expected shell guard to stop before ww-helper, marker err=%v", statErr)
+	}
+	if !strings.Contains(out, "ww-helper new-path") {
+		t.Fatalf("expected migration guidance, got %q", out)
+	}
+}
+
+func TestWwGCPrintsCleanupGuidance(t *testing.T) {
+	home := t.TempDir()
+	rcPath := filepath.Join(home, ".zshrc")
+	if err := os.WriteFile(rcPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("write rc file: %v", err)
+	}
+
+	runInstall(t, home)
+
+	origin := t.TempDir()
+	marker := filepath.Join(home, "helper-invoked")
+	script := fmt.Sprintf("#!/usr/bin/env bash\ntouch %q\nexit 99\n", marker)
+	if err := writeExecutableScript(filepath.Join(home, ".local", "bin", "ww-helper"), script); err != nil {
+		t.Fatalf("write fake ww-helper: %v", err)
+	}
+
+	out, err := runShellResult(t, home, fmt.Sprintf(`
+		cd %q
+		source %q
+		ww gc
+	`, origin, rcPath))
+
+	if err == nil {
+		t.Fatalf("expected ww gc to fail with guidance")
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatalf("expected shell guidance before ww-helper, marker err=%v", statErr)
+	}
+	if !strings.Contains(out, "ww rm --cleanup") {
+		t.Fatalf("expected cleanup guidance, got %q", out)
+	}
+}
+
 func TestWwListPrintsOutputWithoutChangingDirectory(t *testing.T) {
 	home := t.TempDir()
 	rcPath := filepath.Join(home, ".zshrc")
@@ -627,13 +726,20 @@ func runUninstall(t *testing.T, home string, args ...string) {
 func runShell(t *testing.T, workdir, script string) string {
 	t.Helper()
 
-	cmd := exec.Command("bash", "-lc", script)
-	cmd.Dir = workdir
-	out, err := cmd.CombinedOutput()
+	out, err := runShellResult(t, workdir, script)
 	if err != nil {
 		t.Fatalf("shell script failed: %v\n%s", err, out)
 	}
-	return string(out)
+	return out
+}
+
+func runShellResult(t *testing.T, workdir, script string) (string, error) {
+	t.Helper()
+
+	cmd := exec.Command("bash", "-lc", script)
+	cmd.Dir = workdir
+	out, err := cmd.CombinedOutput()
+	return string(out), err
 }
 
 func writeExecutableScript(path, content string) error {

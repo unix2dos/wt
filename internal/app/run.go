@@ -314,11 +314,6 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 	for _, entry := range entries {
 		item := entry.item
 		fmt.Fprintf(out, "[%d] %-6s %s %s", item.Index, ui.StatusLabel(item), item.BranchLabel, item.Path)
-		taskValue := entry.meta.Label
-		if taskValue == "" {
-			taskValue = "unlabeled"
-		}
-		fmt.Fprintf(out, " task=%s", taskValue)
 		if cfg.verbose {
 			if entry.meta.Label != "" {
 				fmt.Fprintf(out, " label=%s", entry.meta.Label)
@@ -551,6 +546,7 @@ func runGC(ctx context.Context, args []string, out io.Writer, errOut io.Writer, 
 
 type removeConfig struct {
 	force          bool
+	cleanup        bool
 	json           bool
 	nonInteractive bool
 	base           string
@@ -613,6 +609,10 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 		previewed = append(previewed, enrichRemovalCandidate(ctx, deps, item, preview, metadata[item.Path]))
 	}
 
+	if cfg.cleanup {
+		return runRemoveCleanup(ctx, cfg, in, out, errOut, deps, previewed, baseBranch)
+	}
+
 	selected := removalCandidate{}
 	if cfg.json || cfg.nonInteractive {
 		selected, err = selectRemovalCandidateNonInteractive(items, previewed, cfg.target)
@@ -664,6 +664,71 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 	return 0
 }
 
+func runRemoveCleanup(ctx context.Context, cfg removeConfig, in io.Reader, out io.Writer, errOut io.Writer, deps Deps, candidates []removalCandidate, baseBranch string) int {
+	if len(candidates) == 0 {
+		return writeCommandError("rm", out, errOut, false, appError{
+			Code:     "WORKTREE_NOT_FOUND",
+			Message:  "no removable worktrees available",
+			ExitCode: 1,
+		})
+	}
+
+	reader := bufio.NewReader(in)
+	fmt.Fprintln(errOut, "Cleanup mode: review workspaces and remove the ones you no longer need.")
+
+	remaining := append([]removalCandidate(nil), candidates...)
+	removedCount := 0
+	for len(remaining) > 0 {
+		writeCleanupOverview(errOut, remaining, cfg.force)
+		selected, ok, exitCode := selectCleanupCandidate(reader, errOut, remaining, cfg.force)
+		if !ok {
+			if exitCode == 0 {
+				writeCleanupSummary(errOut, removedCount, len(remaining))
+			}
+			return exitCode
+		}
+
+		renderRemovalSummary(errOut, selected, cfg.force)
+		if removalSeverityFor(selected.preview, cfg.force) == removalSeverityStop {
+			if err := pausePrompt(reader, errOut, "Press Enter to return to cleanup list: "); err != nil {
+				return writeSelectionError(errOut, err)
+			}
+			if len(remaining) > 0 {
+				fmt.Fprintln(errOut)
+			}
+			continue
+		}
+
+		confirmed, err := confirmPrompt(reader, errOut, "Delete this worktree? [y/N]: ")
+		if err != nil {
+			return writeSelectionError(errOut, err)
+		}
+		if !confirmed {
+			if len(remaining) > 0 {
+				fmt.Fprintln(errOut)
+			}
+			continue
+		}
+
+		result, err := deps.RemoveWorktree(ctx, selected.item, git.RemoveOptions{
+			BaseBranch: baseBranch,
+			Force:      cfg.force,
+		})
+		if err != nil {
+			return writeCommandError("rm", out, errOut, false, err)
+		}
+		writeRemoveHuman(out, result)
+		removedCount++
+		remaining = removeCandidateByPath(remaining, selected.item.Path)
+		if len(remaining) > 0 {
+			fmt.Fprintln(errOut)
+		}
+	}
+
+	writeCleanupSummary(errOut, removedCount, 0)
+	return 0
+}
+
 func orderedWorktrees(ctx context.Context, deps Deps) (string, []worktree.Worktree, map[string]state.WorktreeMetadata, error, error) {
 	repoKey, items, err := deps.ListWorktrees(ctx)
 	if err != nil {
@@ -688,6 +753,8 @@ func parseRemoveArgs(args []string) (removeConfig, error) {
 	var cfg removeConfig
 	for i := 0; i < len(args); i++ {
 		switch arg := args[i]; {
+		case arg == "--cleanup":
+			cfg.cleanup = true
 		case arg == "--force":
 			cfg.force = true
 		case arg == "--json":
@@ -709,6 +776,16 @@ func parseRemoveArgs(args []string) (removeConfig, error) {
 				return cfg, appError{Code: "INVALID_ARGUMENTS", Message: fmt.Sprintf("unexpected extra arguments: %s", strings.Join(args[i:], " ")), ExitCode: 2}
 			}
 			cfg.target = arg
+		}
+	}
+	if cfg.cleanup {
+		switch {
+		case cfg.target != "":
+			return cfg, appError{Code: "INVALID_ARGUMENTS", Message: "--cleanup does not accept a target", ExitCode: 2}
+		case cfg.json:
+			return cfg, appError{Code: "INVALID_ARGUMENTS", Message: "--cleanup cannot be combined with --json", ExitCode: 2}
+		case cfg.nonInteractive:
+			return cfg, appError{Code: "INVALID_ARGUMENTS", Message: "--cleanup cannot be combined with --non-interactive", ExitCode: 2}
 		}
 	}
 	return cfg, nil
@@ -1082,6 +1159,34 @@ func selectRemovalCandidate(reader *bufio.Reader, errOut io.Writer, candidates [
 	return display[index-1], true, 0
 }
 
+func selectCleanupCandidate(reader *bufio.Reader, errOut io.Writer, candidates []removalCandidate, force bool) (removalCandidate, bool, int) {
+	display := orderedRemovalCandidates(candidates, force)
+	renderRemovalCandidates(errOut, display, force)
+
+	for {
+		fmt.Fprint(errOut, "Select a workspace to review [number, Enter to finish]: ")
+		line, err := reader.ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return removalCandidate{}, false, writeSelectionError(errOut, err)
+		}
+
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			return removalCandidate{}, false, 0
+		}
+
+		index, convErr := strconv.Atoi(trimmed)
+		if convErr != nil || index <= 0 || index > len(display) {
+			fmt.Fprintf(errOut, "invalid selection: %q\n", trimmed)
+			if errors.Is(err, io.EOF) {
+				return removalCandidate{}, false, 0
+			}
+			continue
+		}
+		return display[index-1], true, 0
+	}
+}
+
 func orderedRemovalCandidates(candidates []removalCandidate, force bool) []removalCandidate {
 	ordered := make([]removalCandidate, 0, len(candidates))
 	for _, severity := range []removalSeverity{removalSeveritySafe, removalSeverityReview, removalSeverityStop} {
@@ -1092,6 +1197,17 @@ func orderedRemovalCandidates(candidates []removalCandidate, force bool) []remov
 		}
 	}
 	return ordered
+}
+
+func removeCandidateByPath(candidates []removalCandidate, path string) []removalCandidate {
+	out := make([]removalCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.item.Path == path {
+			continue
+		}
+		out = append(out, candidate)
+	}
+	return out
 }
 
 func renderRemovalCandidates(w io.Writer, candidates []removalCandidate, force bool) {
@@ -1194,7 +1310,7 @@ func renderRemovalSummary(w io.Writer, candidate removalCandidate, force bool) {
 	fmt.Fprintf(w, "Selected: %s\n\n", label)
 	fmt.Fprintf(w, "%s %s\n", removalSeverityIcon(severity), removalSummaryTitle(severity))
 
-	renderSummarySection(w, "Task context:", removalTaskContext(candidate))
+	renderSummarySection(w, "Workspace context:", removalTaskContext(candidate))
 	renderSummarySection(w, "Will remove:", removalWillRemove(candidate.preview))
 	renderSummarySection(w, "Will keep:", removalWillKeep(candidate.preview))
 	renderSummarySection(w, "Will not remove:", removalWillNotRemove(candidate.preview))
@@ -1211,21 +1327,21 @@ func enrichRemovalCandidate(ctx context.Context, deps Deps, item worktree.Worktr
 	}
 
 	if candidate.taskLabel == "" {
-		candidate.boundaryWarnings = append(candidate.boundaryWarnings, "worktree is unlabeled")
+		candidate.boundaryWarnings = append(candidate.boundaryWarnings, "no saved workspace context")
 	} else {
 		note, err := readTaskNote(ctx, deps, item.Path, candidate.taskLabel)
 		switch {
 		case err == nil:
 			candidate.taskIntent = note.Intent
 		case errors.Is(err, os.ErrNotExist):
-			candidate.boundaryWarnings = append(candidate.boundaryWarnings, "task note missing for labeled worktree")
+			candidate.boundaryWarnings = append(candidate.boundaryWarnings, "saved workspace context could not be read")
 		default:
-			candidate.boundaryWarnings = append(candidate.boundaryWarnings, fmt.Sprintf("task note unavailable: %v", err))
+			candidate.boundaryWarnings = append(candidate.boundaryWarnings, fmt.Sprintf("saved workspace context could not be read: %v", err))
 		}
 	}
 
 	if item.BranchRef == "" {
-		candidate.boundaryWarnings = append(candidate.boundaryWarnings, "worktree is detached")
+		candidate.boundaryWarnings = append(candidate.boundaryWarnings, "this workspace is detached from a branch")
 	}
 
 	return candidate
@@ -1233,11 +1349,10 @@ func enrichRemovalCandidate(ctx context.Context, deps Deps, item worktree.Worktr
 
 func removalTaskContext(candidate removalCandidate) []string {
 	items := make([]string, 0, 2)
-	if candidate.taskLabel != "" {
-		items = append(items, fmt.Sprintf("task %s", candidate.taskLabel))
-	}
 	if candidate.taskIntent != "" {
 		items = append(items, candidate.taskIntent)
+	} else if candidate.taskLabel != "" {
+		items = append(items, "saved notes available")
 	}
 	return items
 }
@@ -1356,6 +1471,56 @@ func confirmPrompt(reader *bufio.Reader, errOut io.Writer, prompt string) (bool,
 	}
 	answer := strings.ToLower(strings.TrimSpace(line))
 	return answer == "y" || answer == "yes", nil
+}
+
+func pausePrompt(reader *bufio.Reader, errOut io.Writer, prompt string) error {
+	fmt.Fprint(errOut, prompt)
+	_, err := reader.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	return nil
+}
+
+func writeCleanupOverview(out io.Writer, candidates []removalCandidate, force bool) {
+	safe, review, blocked := cleanupCounts(candidates, force)
+	total := len(candidates)
+	fmt.Fprintf(out, "%d workspace%s available: %d safe, %d review, %d blocked.\n",
+		total, pluralize(total), safe, review, blocked)
+}
+
+func writeCleanupSummary(out io.Writer, removedCount int, remainingCount int) {
+	var summary string
+	if removedCount == 0 {
+		summary = "Cleanup finished. No workspaces removed."
+	} else {
+		summary = fmt.Sprintf("Cleanup finished. Removed %d workspace%s.", removedCount, pluralize(removedCount))
+	}
+	if remainingCount > 0 {
+		summary = fmt.Sprintf("%s %d workspace%s still listed.", summary, remainingCount, pluralize(remainingCount))
+	}
+	fmt.Fprintln(out, summary)
+}
+
+func cleanupCounts(candidates []removalCandidate, force bool) (safe int, review int, blocked int) {
+	for _, candidate := range candidates {
+		switch removalSeverityFor(candidate.preview, force) {
+		case removalSeveritySafe:
+			safe++
+		case removalSeverityStop:
+			blocked++
+		default:
+			review++
+		}
+	}
+	return safe, review, blocked
+}
+
+func pluralize(count int) string {
+	if count == 1 {
+		return ""
+	}
+	return "s"
 }
 
 func writeRemoveHuman(out io.Writer, result git.RemoveResult) {

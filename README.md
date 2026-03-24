@@ -1,8 +1,8 @@
 # w+w
 
-Fast worktree switching for safer parallel AI coding.
+Fast worktree switching for safer parallel work.
 
-`ww` is a shell-first Git worktree workflow for the current repository. It keeps the fast switch/create/remove loop, then adds task identity and quick boundary checks so parallel work is harder to mix up.
+`ww` is a shell-first Git worktree workflow for the current repository. It keeps the fast switch/create/remove loop, then adds a human-readable safety check and an interactive cleanup path so parallel work stays manageable.
 
 ## Demo
 
@@ -17,10 +17,10 @@ The demo still shows the core loop in under half a minute:
 ## Why ww
 
 - `ww` changes the current shell directory, so switching worktrees feels like changing folders, not launching a side tool.
-- `ww new --label ...` creates a labeled task workspace and generates a private task note for that worktree.
-- `ww list` shows task identity by default, so unlabeled worktrees stand out immediately.
-- `ww check` prints the current path, branch, task label, dirty state, and task intent when available.
-- `ww rm` explains what will be removed, what will be kept, and where the task boundary is weak before you confirm.
+- `ww new <name>` creates a fresh branch workspace and moves your shell into it immediately.
+- `ww check` prints the current path, branch, changes, and saved workspace context when available.
+- `ww rm` explains what will be removed, what will be kept, and what looks risky before you confirm.
+- `ww rm --cleanup` lets you review old worktrees and delete the ones you no longer need.
 
 ## Quick Start
 
@@ -35,10 +35,11 @@ Then try the boundary-safe loop inside any Git repository:
 
 ```bash
 ww
-ww new feat-demo --label task:demo
+ww new feat-demo
 ww list
 ww check
 ww rm feat-demo
+ww rm --cleanup
 ```
 
 ## Selector Behavior
@@ -61,13 +62,12 @@ ww-helper rm --json --non-interactive feat-demo
 Human-facing safety flow:
 
 ```bash
-ww new feat-a --label agent:claude-code --ttl 24h
-ww list
+ww new feat-a
 ww check
-ww gc --ttl-expired --dry-run
+ww rm --cleanup
 ```
 
-`ww-helper rm --json` uses the same JSON envelope shape as the other machine-readable commands. `gc` still requires at least one explicit selector such as `--ttl-expired`, `--idle 7d`, or `--merged`.
+`ww-helper rm --json` uses the same JSON envelope shape as the other machine-readable commands. For humans, bulk cleanup lives under `ww rm --cleanup`. For automation, `ww-helper gc` still requires at least one explicit selector such as `--ttl-expired`, `--idle 7d`, or `--merged`.
 
 ## Reference
 

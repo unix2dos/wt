@@ -711,7 +711,7 @@ func TestRunListVerboseShowsLabelAndTTL(t *testing.T) {
 	}
 }
 
-func TestRunListShowsTaskIdentityByDefault(t *testing.T) {
+func TestRunListKeepsDefaultOutputFocusedOnWorktrees(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	deps := fakeDeps{
@@ -734,11 +734,12 @@ func TestRunListShowsTaskIdentityByDefault(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
-	if !strings.Contains(stdout.String(), "task=task:fix-login") {
-		t.Fatalf("expected labeled task marker in list output, got %q", stdout.String())
+	if !strings.Contains(stdout.String(), "alpha /repo/.worktrees/alpha") ||
+		!strings.Contains(stdout.String(), "beta /repo/.worktrees/beta") {
+		t.Fatalf("expected worktree rows in list output, got %q", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "task=unlabeled") {
-		t.Fatalf("expected unlabeled task marker in list output, got %q", stdout.String())
+	if strings.Contains(stdout.String(), "task=") || strings.Contains(stdout.String(), "label=") {
+		t.Fatalf("expected metadata hidden from default list output, got %q", stdout.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
@@ -1209,11 +1210,12 @@ func TestRunRemoveSummaryIncludesTaskContext(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
-	if !strings.Contains(stderr.String(), "task:fix-login") {
-		t.Fatalf("expected task label in summary, got %q", stderr.String())
+	if strings.Contains(stderr.String(), "Task context:") {
+		t.Fatalf("expected task wording removed from summary, got %q", stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "Fix the login redirect loop") {
-		t.Fatalf("expected task intent in summary, got %q", stderr.String())
+	if !strings.Contains(stderr.String(), "Workspace context:") ||
+		!strings.Contains(stderr.String(), "Fix the login redirect loop") {
+		t.Fatalf("expected human workspace context in summary, got %q", stderr.String())
 	}
 }
 
@@ -1240,10 +1242,10 @@ func TestRunRemoveSummaryShowsWeakerBoundaryState(t *testing.T) {
 	if code != 130 {
 		t.Fatalf("expected exit code 130, got %d", code)
 	}
-	if !strings.Contains(stderr.String(), "unlabeled") {
-		t.Fatalf("expected unlabeled boundary warning, got %q", stderr.String())
+	if !strings.Contains(stderr.String(), "no saved workspace context") {
+		t.Fatalf("expected missing-context boundary warning, got %q", stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "detached") {
+	if !strings.Contains(stderr.String(), "detached from a branch") {
 		t.Fatalf("expected detached boundary warning, got %q", stderr.String())
 	}
 }
@@ -1486,6 +1488,152 @@ func TestRunRmPassesForceToRemoval(t *testing.T) {
 	}
 	if !removed.opts.Force {
 		t.Fatalf("expected force to be forwarded, got %#v", removed)
+	}
+}
+
+func TestRunRmCleanupRejectsTarget(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := Run(context.Background(), []string{"rm", "--cleanup", "alpha"}, strings.NewReader(""), stdout, stderr, fakeDeps{})
+
+	if code != 2 {
+		t.Fatalf("expected exit code 2, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "--cleanup") {
+		t.Fatalf("expected cleanup validation message, got %q", stderr.String())
+	}
+}
+
+func TestRunRmCleanupRejectsJSON(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := Run(context.Background(), []string{"rm", "--cleanup", "--json"}, strings.NewReader(""), stdout, stderr, fakeDeps{})
+
+	if code != 2 {
+		t.Fatalf("expected exit code 2, got %d", code)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected json error to avoid stderr output, got %q", stderr.String())
+	}
+	envelope := decodeEnvelope(t, stdout.String())
+	if envelope.OK || envelope.Error == nil {
+		t.Fatalf("expected json error envelope, got %#v", envelope)
+	}
+	if !strings.Contains(envelope.Error.Message, "--cleanup") {
+		t.Fatalf("expected cleanup validation message, got %#v", envelope.Error)
+	}
+}
+
+func TestRunRmCleanupRemovesSelectedCandidate(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	removed := &removeCall{}
+	deps := fakeDeps{
+		repoKey: "/repo/.git",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", BranchRef: "refs/heads/alpha"},
+			{Path: "/repo/.worktrees/beta", BranchLabel: "beta", BranchRef: "refs/heads/beta"},
+		},
+		previews: map[string]git.RemovalPreview{
+			"/repo/.worktrees/alpha": {
+				Worktree:     worktree.Worktree{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", BranchRef: "refs/heads/alpha"},
+				BaseBranch:   "main",
+				BranchMerged: true,
+				DeleteBranch: true,
+			},
+			"/repo/.worktrees/beta": {
+				Worktree:   worktree.Worktree{Path: "/repo/.worktrees/beta", BranchLabel: "beta", BranchRef: "refs/heads/beta"},
+				BaseBranch: "main",
+			},
+		},
+		defaultBranch: "main",
+		removeResult: git.RemoveResult{
+			WorktreePath:    "/repo/.worktrees/alpha",
+			Branch:          "alpha",
+			BaseBranch:      "main",
+			RemovedWorktree: true,
+			DeletedBranch:   true,
+		},
+		removed: removed,
+	}
+
+	code := Run(context.Background(), []string{"rm", "--cleanup"}, strings.NewReader("1\ny\n"), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "Cleanup mode") {
+		t.Fatalf("expected cleanup banner, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "2 workspaces available: 1 safe, 1 review, 0 blocked.") {
+		t.Fatalf("expected cleanup availability summary, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "Select a workspace to review [number, Enter to finish]:") ||
+		!strings.Contains(stderr.String(), "Delete this worktree? [y/N]:") {
+		t.Fatalf("expected cleanup confirmation prompt, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "Cleanup finished. Removed 1 workspace. 1 workspace still listed.") {
+		t.Fatalf("expected cleanup completion summary, got %q", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "removed worktree /repo/.worktrees/alpha") {
+		t.Fatalf("expected cleanup removal output, got %q", stdout.String())
+	}
+	if removed.item.Path != "/repo/.worktrees/alpha" {
+		t.Fatalf("expected cleanup to remove alpha, got %#v", removed)
+	}
+}
+
+func TestRunRmCleanupDirtyCandidateStopsBeforeRemoval(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	removed := &removeCall{}
+	deps := fakeDeps{
+		repoKey: "/repo/.git",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", IsCurrent: true},
+			{Path: "/repo/.worktrees/beta", BranchLabel: "beta", BranchRef: "refs/heads/beta"},
+		},
+		previews: map[string]git.RemovalPreview{
+			"/repo/.worktrees/beta": {
+				Worktree:     worktree.Worktree{Path: "/repo/.worktrees/beta", BranchLabel: "beta", BranchRef: "refs/heads/beta"},
+				BaseBranch:   "main",
+				Dirty:        true,
+				BranchMerged: false,
+			},
+		},
+		defaultBranch: "main",
+		removed:       removed,
+	}
+
+	code := Run(context.Background(), []string{"rm", "--cleanup"}, strings.NewReader("1\n\n\n"), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "uncommitted changes detected") ||
+		!strings.Contains(stderr.String(), "Select a workspace to review [number, Enter to finish]:") {
+		t.Fatalf("expected cleanup stop card, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "Press Enter to return to cleanup list:") {
+		t.Fatalf("expected cleanup continue prompt, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "1 workspace available: 0 safe, 0 review, 1 blocked.") {
+		t.Fatalf("expected cleanup availability summary, got %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "Cleanup finished. No workspaces removed. 1 workspace still listed.") {
+		t.Fatalf("expected cleanup no-op summary, got %q", stderr.String())
+	}
+	if strings.Count(stderr.String(), "beta") < 2 {
+		t.Fatalf("expected dirty workspace to remain visible in cleanup list, got %q", stderr.String())
+	}
+	if removed.item.Path != "" {
+		t.Fatalf("expected cleanup not to remove dirty candidate, got %#v", removed)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout output, got %q", stdout.String())
 	}
 }
 

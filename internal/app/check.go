@@ -41,11 +41,6 @@ func runCheck(ctx context.Context, args []string, out io.Writer, errOut io.Write
 		branch = "DETACHED"
 	}
 
-	taskLabel := entry.meta.Label
-	if taskLabel == "" {
-		taskLabel = "unlabeled"
-	}
-
 	dirtyState := "clean"
 	if entry.item.IsDirty {
 		dirtyState = "dirty"
@@ -53,12 +48,15 @@ func runCheck(ctx context.Context, args []string, out io.Writer, errOut io.Write
 
 	fmt.Fprintf(out, "Path: %s\n", entry.item.Path)
 	fmt.Fprintf(out, "Branch: %s\n", branch)
-	fmt.Fprintf(out, "Task: %s\n", taskLabel)
-	fmt.Fprintf(out, "Dirty: %s\n", dirtyState)
+	fmt.Fprintf(out, "Changes: %s\n", dirtyState)
 
 	note, warnings := loadCheckNote(ctx, deps, entry)
-	if note != nil && note.Intent != "" {
-		fmt.Fprintf(out, "Intent: %s\n", note.Intent)
+	if note != nil {
+		context := "saved notes available"
+		if note.Intent != "" {
+			context = note.Intent
+		}
+		fmt.Fprintf(out, "Workspace context: %s\n", context)
 	}
 	for _, warning := range warnings {
 		fmt.Fprintln(errOut, warning)
@@ -78,20 +76,20 @@ func currentListEntry(items []worktree.Worktree, metadata map[string]state.Workt
 func loadCheckNote(ctx context.Context, deps Deps, entry listEntry) (*tasknote.Note, []string) {
 	var warnings []string
 	if entry.item.BranchRef == "" {
-		warnings = append(warnings, "warning: current worktree is detached")
+		warnings = append(warnings, "warning: this workspace is detached from a branch")
 	}
 	if entry.meta.Label == "" {
-		warnings = append(warnings, "warning: current worktree is unlabeled")
+		warnings = append(warnings, "warning: no saved workspace context")
 		return nil, warnings
 	}
 
 	note, err := readTaskNote(ctx, deps, entry.item.Path, entry.meta.Label)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			warnings = append(warnings, "warning: task note missing for labeled worktree")
+			warnings = append(warnings, "warning: saved workspace context could not be read")
 			return nil, warnings
 		}
-		warnings = append(warnings, fmt.Sprintf("warning: task note unreadable: %v", err))
+		warnings = append(warnings, fmt.Sprintf("warning: saved workspace context could not be read: %v", err))
 		return nil, warnings
 	}
 

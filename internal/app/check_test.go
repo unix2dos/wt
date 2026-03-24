@@ -54,14 +54,14 @@ func TestRunCheckShowsCurrentWorktreeSummary(t *testing.T) {
 	if !strings.Contains(stdout.String(), "Branch: alpha") {
 		t.Fatalf("expected branch in output, got %q", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "Task: task:fix-login") {
-		t.Fatalf("expected task label in output, got %q", stdout.String())
+	if strings.Contains(stdout.String(), "Task:") {
+		t.Fatalf("expected task wording removed, got %q", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "Dirty: clean") {
+	if !strings.Contains(stdout.String(), "Changes: clean") {
 		t.Fatalf("expected clean state in output, got %q", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "Intent: Fix the login redirect loop") {
-		t.Fatalf("expected intent in output, got %q", stdout.String())
+	if !strings.Contains(stdout.String(), "Workspace context: Fix the login redirect loop") {
+		t.Fatalf("expected workspace context in output, got %q", stdout.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no warnings, got %q", stderr.String())
@@ -86,8 +86,49 @@ func TestRunCheckWarnsForDetachedWorktree(t *testing.T) {
 	if !strings.Contains(stdout.String(), "Branch: DETACHED") {
 		t.Fatalf("expected detached branch output, got %q", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "detached") {
+	if !strings.Contains(stderr.String(), "detached from a branch") {
 		t.Fatalf("expected detached warning, got %q", stderr.String())
+	}
+}
+
+func TestRunCheckShowsSavedContextWithoutIntent(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	notePath := filepath.Join(t.TempDir(), "git-private", "ww", "task-note.md")
+	if err := tasknote.WriteFile(notePath, tasknote.Note{
+		TaskLabel: "task:chores",
+		Branch:    "alpha",
+		CreatedAt: time.Date(2026, 3, 24, 12, 34, 56, 0, time.UTC),
+		Body:      "Created by ww.",
+	}); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+
+	deps := fakeDeps{
+		repoKey: "/repo/.git",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", BranchRef: "refs/heads/alpha", IsCurrent: true},
+		},
+		metadata: map[string]map[string]state.WorktreeMetadata{
+			"/repo/.git": {
+				"/repo/.worktrees/alpha": {
+					Label: "task:chores",
+				},
+			},
+		},
+		worktreeGitPath: notePath,
+	}
+
+	code := Run(context.Background(), []string{"check"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if !strings.Contains(stdout.String(), "Workspace context: saved notes available") {
+		t.Fatalf("expected saved-context fallback output, got %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no warnings, got %q", stderr.String())
 	}
 }
 
@@ -106,11 +147,11 @@ func TestRunCheckWarnsForUnlabeledWorktree(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
-	if !strings.Contains(stdout.String(), "Task: unlabeled") {
-		t.Fatalf("expected unlabeled task output, got %q", stdout.String())
+	if strings.Contains(stdout.String(), "Workspace context:") {
+		t.Fatalf("expected no workspace context line, got %q", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "unlabeled") {
-		t.Fatalf("expected unlabeled warning, got %q", stderr.String())
+	if !strings.Contains(stderr.String(), "no saved workspace context") {
+		t.Fatalf("expected missing-context warning, got %q", stderr.String())
 	}
 }
 
@@ -137,11 +178,11 @@ func TestRunCheckWarnsWhenTaskNoteIsMissing(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
-	if !strings.Contains(stdout.String(), "Task: task:fix-login") {
-		t.Fatalf("expected task label in output, got %q", stdout.String())
+	if strings.Contains(stdout.String(), "Task:") {
+		t.Fatalf("expected task wording removed, got %q", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "task note") {
-		t.Fatalf("expected missing-note warning, got %q", stderr.String())
+	if !strings.Contains(stderr.String(), "saved workspace context could not be read") {
+		t.Fatalf("expected human missing-context warning, got %q", stderr.String())
 	}
 }
 

@@ -6,6 +6,7 @@ Usage:
   ww check
   ww new <name>
   ww rm [--force] [--base <branch>] [<name>]
+  ww rm --cleanup
   ww help
 
 Commands:
@@ -13,7 +14,7 @@ Commands:
   list    Print worktrees without changing directory.
   check   Print the current worktree safety summary.
   new     Create a worktree under ./.worktrees/<name> and enter it.
-  rm      Remove a worktree and delete its branch only when merged.
+  rm      Remove one worktree, or run cleanup review mode with --cleanup.
   help    Show this help.
 
 Notes:
@@ -27,6 +28,7 @@ Examples:
   ww switch feat-a
   ww new feat-demo
   ww rm feat-demo
+  ww rm --cleanup
 EOF
 }
 
@@ -38,6 +40,27 @@ ww_has_json_flag() {
     fi
   done
   return 1
+}
+
+ww_is_helper_only_new_flag() {
+  case "${1-}" in
+    --label|--label=*|--ttl|--ttl=*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+ww_validate_human_new_args() {
+  local arg
+  for arg in "$@"; do
+    if ww_is_helper_only_new_flag "$arg"; then
+      printf '%s\n' "ww new only supports creating a worktree." >&2
+      printf '%s\n' "For metadata-aware automation, use ww-helper new-path ..." >&2
+      return 2
+    fi
+  done
+  return 0
 }
 
 ww() {
@@ -58,6 +81,7 @@ ww() {
       ;;
     new)
       shift
+      ww_validate_human_new_args "$@" || return $?
       if ww_has_json_flag "$@"; then
         "$ww_helper_bin" new-path "$@"
         return $?
@@ -77,6 +101,11 @@ ww() {
     rm)
       "$ww_helper_bin" "$@"
       return $?
+      ;;
+    gc)
+      printf '%s\n' "ww gc is not part of the human shell workflow." >&2
+      printf '%s\n' "Use ww rm --cleanup for interactive cleanup, or ww-helper gc for automation." >&2
+      return 2
       ;;
     help|-h|--help)
       ww_print_help

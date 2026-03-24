@@ -84,6 +84,7 @@ If you installed into Bash, reload `~/.bashrc` instead.
 - `ww check` prints the current worktree safety summary without changing directory.
 - `ww new <name>` creates a new worktree under `./.worktrees/<name>` and switches into it.
 - `ww rm [<name>]` removes a worktree and deletes its branch only when that branch is already merged into the effective base branch.
+- `ww rm --cleanup` opens an interactive cleanup review for old worktrees.
 - `ww help` or `ww --help` prints the command summary.
 - `ww` uses `fzf` automatically when available and falls back to the built-in arrow-key selector otherwise.
 
@@ -150,13 +151,7 @@ Returns:
 
 `label` is stored as a single free-text string. `ttl` is fixed from creation time; this release does not include a metadata editing command.
 
-When `label` is present, `ww` also generates a private task note for that worktree under Git's per-worktree admin directory via:
-
-```bash
-git -C <worktree> rev-parse --git-path ww/task-note.md
-```
-
-That task note is not written into tracked files.
+When `label` is present, `ww-helper` also stores extra workspace context for later human summaries. That context is kept in Git's per-worktree admin area, not in tracked files.
 
 #### `ww-helper gc --ttl-expired --idle 7d --dry-run --json`
 
@@ -228,21 +223,21 @@ Exact name matches win. If no exact match exists, `ww` falls back to a unique pr
 
 ```bash
 ww list
-ww list --filter label=agent:claude-code --verbose
+ww list --verbose
 ```
 
 This prints the current worktree table without changing your shell directory.
 
-Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, the status column uses the same `ACTIVE` / `ACTIVE*` / `DIRTY` markers as the interactive selector, and the default human-readable output includes `task=<label>` or `task=unlabeled`.
+Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, and the status column uses the same `ACTIVE` / `ACTIVE*` / `DIRTY` markers as the interactive selector.
 
-Available Phase 2 filters:
+Available helper-driven filters:
 
 - `--filter dirty`
 - `--filter label=agent:claude-code`
 - `--filter label~agent`
 - `--filter stale=7d`
 
-`--verbose` appends metadata such as `label`, `ttl`, and `last_used_at` to the human-readable output.
+`--verbose` appends extra metadata such as stored workspace context and timestamps to the human-readable output.
 
 ### Check
 
@@ -250,48 +245,22 @@ Available Phase 2 filters:
 ww check
 ```
 
-`ww check` prints the current worktree path, branch, task label, dirty state, and task intent when a task note is available.
+`ww check` prints the current worktree path, branch, change state, and saved workspace context when that context is available.
 
 Warnings stay human-readable and conservative:
 
 - detached worktrees are called out explicitly
-- unlabeled worktrees are called out explicitly
-- missing task notes warn instead of failing
+- missing saved workspace context warns instead of failing
 
 ### New
 
 ```bash
 ww new feat-a
-ww new feat-a --label agent:claude-code --ttl 24h
 ```
 
 This creates branch `feat-a` from the current `HEAD` in `./.worktrees/feat-a`, then switches into it.
 
-This release stores `created_at` for new worktrees in `state-v2.json`. If you pass `--ttl`, expiry is computed as `created_at + ttl` and does not slide on later access.
-
-When you also pass `--label`, `ww` creates a private task note scaffold for that worktree so later `ww check` and removal summaries can restore task context.
-
-### GC
-
-```bash
-ww gc --ttl-expired --dry-run
-ww gc --idle 7d
-ww gc --merged
-ww gc --ttl-expired --idle 7d --dry-run --json
-```
-
-`gc` evaluates the union of the selected rules:
-
-- TTL-expired worktrees
-- idle worktrees older than the requested threshold
-- worktrees whose branch is already merged into the effective base branch
-
-Safety rules:
-
-- active worktrees are always skipped
-- dirty worktrees are skipped unless you pass `--force`
-- worktrees without TTL are ignored by `--ttl-expired`
-- `gc` is manual only; there is no automatic background cleanup
+For metadata-aware creation, use `ww-helper new-path --json --label ... --ttl ...`.
 
 ### Remove
 
@@ -300,11 +269,14 @@ ww rm
 ww rm feat-a
 ww rm --force feat-a
 ww rm --base release/1.0 feat-a
+ww rm --cleanup
 ```
 
 `ww rm` groups removable worktrees by deletion risk, prints a plain-language summary card after selection, removes the worktree, and only deletes the branch when it is already merged into the effective base branch. Dirty worktrees stop before confirmation unless you explicitly rerun with `--force`.
 
-When task metadata exists, the summary card also includes task label, task intent, and weak-boundary warnings such as detached or unlabeled state.
+`ww rm --cleanup` opens a repeated review flow for non-current worktrees so you can clean up multiple stale workspaces without learning helper-only cleanup rules.
+
+When saved workspace context exists, the summary card also includes that context and weak-boundary warnings such as detached state or missing context.
 
 ### Typical Flow
 
@@ -315,6 +287,7 @@ ww switch feat-a
 ww list
 ww new feat-b
 ww rm feat-a
+ww rm --cleanup
 ```
 
 `ww`, `ww 2`, and `ww switch feat-a` all switch the current shell into the target worktree.
@@ -338,6 +311,7 @@ ww switch feat-a
 ww list
 ww new feat-b
 ww rm feat-a
+ww rm --cleanup
 ```
 
 Installer checks:
