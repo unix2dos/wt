@@ -1,6 +1,6 @@
 # w+w
 
-Safer parallel AI coding with Git worktrees.
+Fast worktree switching for safer parallel AI coding.
 
 `ww` is a shell-first Git worktree workflow for the current repository. It keeps the fast switch/create/remove loop, then adds task identity and quick boundary checks so parallel work is harder to mix up.
 

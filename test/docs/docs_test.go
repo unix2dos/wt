@@ -11,7 +11,7 @@ func TestPagesDemoContract(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 
 	readme := mustReadFile(t, filepath.Join(root, "README.md"))
-	if !strings.Contains(readme, "Safer parallel AI coding with Git worktrees.") {
+	if !strings.Contains(readme, "Fast worktree switching for safer parallel AI coding.") {
 		t.Fatalf("expected README landing-page value proposition")
 	}
 	if !strings.Contains(readme, "## Demo") {
