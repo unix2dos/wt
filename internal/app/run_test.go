@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"ww/internal/git"
 	"ww/internal/state"
+	"ww/internal/tasknote"
 	"ww/internal/ui"
 	"ww/internal/worktree"
 )
@@ -472,6 +475,80 @@ func TestRunNewPathJSONIncludesMetadataInputs(t *testing.T) {
 	}
 	if recorded.meta.Label != "agent:claude" || recorded.meta.TTL != "24h" || recorded.meta.CreatedAt == 0 {
 		t.Fatalf("unexpected recorded metadata: %#v", recorded.meta)
+	}
+}
+
+func TestRunNewPathLabelCreatesTaskNote(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	recorded := &recordWorktreeCall{}
+	gitPath := &gitPathCall{}
+	notePath := filepath.Join(t.TempDir(), "git-private", "ww", "task-note.md")
+	deps := fakeDeps{
+		createPath:          "/repo/.worktrees/alpha",
+		repoKey:             "/repo/.git",
+		touched:             &touchRecord{},
+		recorded:            recorded,
+		worktreeGitPath:     notePath,
+		worktreeGitPathCall: gitPath,
+	}
+
+	code := Run(context.Background(), []string{"new-path", "--label", "task:fix-login", "alpha"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+	if gitPath.worktreePath != "/repo/.worktrees/alpha" || gitPath.rel != "ww/task-note.md" {
+		t.Fatalf("expected worktree git path lookup, got %#v", gitPath)
+	}
+	if recorded.meta.Label != "task:fix-login" {
+		t.Fatalf("expected recorded label, got %#v", recorded.meta)
+	}
+
+	note, err := tasknote.ReadFile(notePath)
+	if err != nil {
+		t.Fatalf("expected task note to be readable: %v", err)
+	}
+	if note.TaskLabel != "task:fix-login" {
+		t.Fatalf("expected task label %q, got %q", "task:fix-login", note.TaskLabel)
+	}
+	if note.Branch != "alpha" {
+		t.Fatalf("expected branch %q, got %q", "alpha", note.Branch)
+	}
+	if note.CreatedAt.IsZero() {
+		t.Fatalf("expected created_at to be set, got %#v", note)
+	}
+	if !strings.Contains(note.Body, "Created by ww.") {
+		t.Fatalf("expected scaffold body in note, got %q", note.Body)
+	}
+}
+
+func TestRunNewPathWithoutLabelDoesNotCreateTaskNote(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	gitPath := &gitPathCall{}
+	notePath := filepath.Join(t.TempDir(), "git-private", "ww", "task-note.md")
+	deps := fakeDeps{
+		createPath:          "/repo/.worktrees/alpha",
+		repoKey:             "/repo/.git",
+		touched:             &touchRecord{},
+		worktreeGitPath:     notePath,
+		worktreeGitPathCall: gitPath,
+	}
+
+	code := Run(context.Background(), []string{"new-path", "alpha"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if gitPath.worktreePath != "" || gitPath.rel != "" {
+		t.Fatalf("expected no worktree git path lookup, got %#v", gitPath)
+	}
+	if _, err := os.Stat(notePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected task note to be absent, got err=%v", err)
 	}
 }
 
@@ -1770,29 +1847,32 @@ type envelopeError struct {
 }
 
 type fakeDeps struct {
-	repoKey          string
-	repoKeyErr       error
-	worktrees        []worktree.Worktree
-	err              error
-	fzfSelected      worktree.Worktree
-	fzfErr           error
-	tuiSelected      worktree.Worktree
-	tuiErr           error
-	createPath       string
-	createErr        error
-	loadErr          error
-	touchErr         error
-	state            map[string]map[string]int64
-	metadata         map[string]map[string]state.WorktreeMetadata
-	touched          *touchRecord
-	recorded         *recordWorktreeCall
-	defaultBranch    string
-	defaultBranchErr error
-	previews         map[string]git.RemovalPreview
-	previewErr       error
-	removeResult     git.RemoveResult
-	removeErr        error
-	removed          *removeCall
+	repoKey             string
+	repoKeyErr          error
+	worktrees           []worktree.Worktree
+	err                 error
+	fzfSelected         worktree.Worktree
+	fzfErr              error
+	tuiSelected         worktree.Worktree
+	tuiErr              error
+	createPath          string
+	createErr           error
+	loadErr             error
+	touchErr            error
+	state               map[string]map[string]int64
+	metadata            map[string]map[string]state.WorktreeMetadata
+	touched             *touchRecord
+	recorded            *recordWorktreeCall
+	worktreeGitPath     string
+	worktreeGitPathErr  error
+	worktreeGitPathCall *gitPathCall
+	defaultBranch       string
+	defaultBranchErr    error
+	previews            map[string]git.RemovalPreview
+	previewErr          error
+	removeResult        git.RemoveResult
+	removeErr           error
+	removed             *removeCall
 }
 
 type touchRecord struct {
@@ -1804,6 +1884,11 @@ type recordWorktreeCall struct {
 	repoKey string
 	path    string
 	meta    state.WorktreeMetadata
+}
+
+type gitPathCall struct {
+	worktreePath string
+	rel          string
 }
 
 type removeCall struct {
@@ -1945,6 +2030,17 @@ func (f fakeDeps) RecordWorktreeState(_ context.Context, repoKey, path string, m
 		f.recorded.meta = meta
 	}
 	return nil
+}
+
+func (f fakeDeps) WorktreeGitPath(_ context.Context, worktreePath string, rel string) (string, error) {
+	if f.worktreeGitPathCall != nil {
+		f.worktreeGitPathCall.worktreePath = worktreePath
+		f.worktreeGitPathCall.rel = rel
+	}
+	if f.worktreeGitPathErr != nil {
+		return "", f.worktreeGitPathErr
+	}
+	return f.worktreeGitPath, nil
 }
 
 func (f fakeDeps) DefaultBranch(context.Context) (string, error) {

@@ -15,6 +15,7 @@ import (
 
 	"ww/internal/git"
 	"ww/internal/state"
+	"ww/internal/tasknote"
 	"ww/internal/ui"
 	"ww/internal/worktree"
 )
@@ -29,6 +30,7 @@ type Deps interface {
 	LoadWorktreeMetadata(ctx context.Context, repoKey string) (map[string]state.WorktreeMetadata, error)
 	TouchWorktreeState(ctx context.Context, repoKey, path string) error
 	RecordWorktreeState(ctx context.Context, repoKey, path string, meta state.WorktreeMetadata) error
+	WorktreeGitPath(ctx context.Context, worktreePath string, rel string) (string, error)
 	DefaultBranch(ctx context.Context) (string, error)
 	PreviewRemoval(ctx context.Context, item worktree.Worktree, baseBranch string) (git.RemovalPreview, error)
 	RemoveWorktree(ctx context.Context, item worktree.Worktree, opts git.RemoveOptions) (git.RemoveResult, error)
@@ -109,6 +111,10 @@ func (d RealDeps) RecordWorktreeState(_ context.Context, repoKey, path string, m
 		return err
 	}
 	return store.RecordWorktree(repoKey, path, meta)
+}
+
+func (d RealDeps) WorktreeGitPath(ctx context.Context, worktreePath string, rel string) (string, error) {
+	return git.WorktreeGitPath(ctx, git.ExecRunner{}, worktreePath, rel)
 }
 
 func (d RealDeps) DefaultBranch(ctx context.Context) (string, error) {
@@ -349,9 +355,13 @@ func runNewPath(ctx context.Context, args []string, out io.Writer, errOut io.Wri
 		Label:     cfg.label,
 		TTL:       cfg.ttl,
 	}
+	createdAt := time.Unix(0, meta.CreatedAt).UTC()
 
 	if cfg.json {
 		if err := recordWorktreeStateBestEffort(ctx, deps, repoKey, path, meta); err != nil {
+			return writeCommandError("new-path", out, errOut, cfg.json, err)
+		}
+		if err := createTaskNoteIfLabeled(ctx, deps, path, cfg.name, cfg.label, createdAt); err != nil {
 			return writeCommandError("new-path", out, errOut, cfg.json, err)
 		}
 		if err := touchWorktreeStateBestEffort(ctx, deps, repoKey, path); err != nil {
@@ -365,8 +375,40 @@ func runNewPath(ctx context.Context, args []string, out io.Writer, errOut io.Wri
 
 	fmt.Fprintln(out, path)
 	warnStateIssue(errOut, recordWorktreeStateBestEffort(ctx, deps, repoKey, path, meta))
+	warnStateIssue(errOut, createTaskNoteIfLabeled(ctx, deps, path, cfg.name, cfg.label, createdAt))
 	warnStateIssue(errOut, touchWorktreeStateBestEffort(ctx, deps, repoKey, path))
 	return 0
+}
+
+func createTaskNoteIfLabeled(ctx context.Context, deps Deps, worktreePath, branch, label string, createdAt time.Time) error {
+	if label == "" {
+		return nil
+	}
+
+	notePath, err := deps.WorktreeGitPath(ctx, worktreePath, "ww/task-note.md")
+	if err != nil {
+		return fmt.Errorf("task note skipped: %w", err)
+	}
+
+	note := tasknote.Note{
+		TaskLabel: label,
+		Branch:    branch,
+		CreatedAt: createdAt,
+		Intent:    "Fill in what this worktree is trying to accomplish.",
+		Body: strings.Join([]string{
+			"Created by ww.",
+			"",
+			"Why this exists:",
+			"- Keep this task isolated from other parallel work.",
+			"",
+			"Next steps:",
+			"- Fill in what this worktree is trying to accomplish.",
+		}, "\n"),
+	}
+	if err := tasknote.WriteFile(notePath, note); err != nil {
+		return fmt.Errorf("task note skipped: %w", err)
+	}
+	return nil
 }
 
 type gcConfig struct {
