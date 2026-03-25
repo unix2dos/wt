@@ -15,18 +15,46 @@ func TestFormatFzfCandidatesIncludesIndexStatusBranchAndPath(t *testing.T) {
 		{Index: 2, BranchLabel: "feat-a", Path: "/repo/.worktrees/feat-a", IsDirty: true},
 	}))
 
-	if !strings.Contains(got, "1\tACTIVE*\tmain\t/repo") {
+	if !strings.Contains(got, "1\t[CURRENT] [DIRTY]\tmain  \t/repo") {
 		t.Fatalf("expected current candidate, got %q", got)
 	}
-	if !strings.Contains(got, "2\tDIRTY\tfeat-a\t/repo/.worktrees/feat-a") {
+	if !strings.Contains(got, "2\t[DIRTY]          \tfeat-a\t/repo/.worktrees/feat-a") {
 		t.Fatalf("expected non-current candidate, got %q", got)
+	}
+}
+
+func TestFormatFzfCandidatesPadsStatusAndBranchFields(t *testing.T) {
+	got := string(formatFzfCandidates([]worktree.Worktree{
+		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true},
+		{Index: 2, BranchLabel: "codex/current-dirty-status", Path: "/repo/.worktrees/current-dirty-status", IsDirty: true},
+	}))
+
+	lines := strings.Split(strings.TrimSpace(got), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected two candidates, got %q", got)
+	}
+
+	first := strings.Split(lines[0], "\t")
+	second := strings.Split(lines[1], "\t")
+	if len(first) != 4 || len(second) != 4 {
+		t.Fatalf("expected four tab-separated fields, got %q", got)
+	}
+
+	if len(first[1]) != len(second[1]) {
+		t.Fatalf("expected padded status fields, got %q and %q", first[1], second[1])
+	}
+	if len(first[2]) != len(second[2]) {
+		t.Fatalf("expected padded branch fields, got %q and %q", first[2], second[2])
+	}
+	if strings.TrimSpace(first[2]) != "main" || strings.TrimSpace(second[2]) != "codex/current-dirty-status" {
+		t.Fatalf("expected branch names to survive padding, got %q", got)
 	}
 }
 
 func TestSelectWorktreeWithFzfReturnsSelectedWorktree(t *testing.T) {
 	runner := &fakeFzfRunner{
 		lookPath: "/usr/bin/fzf",
-		stdout:   []byte("2\tDIRTY\tfeat-a\t/repo/.worktrees/feat-a\n"),
+		stdout:   []byte("2\t[DIRTY]\tfeat-a\t/repo/.worktrees/feat-a\n"),
 	}
 
 	got, err := SelectWorktreeWithFzf(context.Background(), []worktree.Worktree{
@@ -56,7 +84,7 @@ func TestSelectWorktreeWithFzfReturnsSelectedWorktree(t *testing.T) {
 func TestSelectWorktreeWithFzfFocusesCurrentWorktreeByDefault(t *testing.T) {
 	runner := &fakeFzfRunner{
 		lookPath: "/usr/bin/fzf",
-		stdout:   []byte("2\tACTIVE*\tmain\t/repo\n"),
+		stdout:   []byte("2\t[CURRENT] [DIRTY]\tmain\t/repo\n"),
 	}
 
 	_, err := SelectWorktreeWithFzf(context.Background(), []worktree.Worktree{

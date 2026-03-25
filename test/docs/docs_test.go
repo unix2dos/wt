@@ -65,6 +65,10 @@ func TestPagesDemoContract(t *testing.T) {
 		"ww-helper new-path --json --label agent:claude-code --ttl 24h feat-a",
 		"ww-helper gc --ttl-expired --idle 7d --dry-run --json",
 		"#### Breaking Change",
+		"[CURRENT]",
+		"[DIRTY]",
+		"┌───────┬",
+		"Long `PATH` values are wrapped inside the `PATH` cell",
 	} {
 		if !strings.Contains(reference, snippet) {
 			t.Fatalf("expected reference doc to contain %q", snippet)
@@ -75,6 +79,7 @@ func TestPagesDemoContract(t *testing.T) {
 		"ww gc --ttl-expired --dry-run",
 		"ww gc --idle 7d",
 		"ww gc --merged",
+		"ACTIVE*",
 	} {
 		if strings.Contains(reference, forbidden) {
 			t.Fatalf("expected reference doc to stop teaching human-facing %q", forbidden)
@@ -148,10 +153,19 @@ func TestPagesDemoContract(t *testing.T) {
 	if !strings.Contains(cast, "ww rm feat-demo") {
 		t.Fatalf("expected demo cast to cover the removal flow")
 	}
+	if !strings.Contains(cast, "[CURRENT]") {
+		t.Fatalf("expected demo cast to show CURRENT status tags")
+	}
+	if strings.Contains(cast, "ACTIVE") {
+		t.Fatalf("expected demo cast to stop showing ACTIVE statuses")
+	}
 
 	svg := mustReadFile(t, filepath.Join(root, "docs", "assets", "ww-demo.svg"))
 	if !strings.Contains(svg, "<svg") {
 		t.Fatalf("expected generated SVG preview asset")
+	}
+	if strings.Contains(svg, "ACTIVE") {
+		t.Fatalf("expected generated SVG preview to stop showing ACTIVE statuses")
 	}
 }
 

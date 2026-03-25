@@ -193,8 +193,8 @@ ww
 Without `fzf`, this opens the built-in selector like:
 
 ```text
-* [1] ACTIVE main /path/to/repo
-  [2]        feat-a /path/to/repo/.worktrees/feat-a
+* [1] [CURRENT]         main   /path/to/repo
+  [2]                   feat-a /path/to/repo/.worktrees/feat-a
 
 Use Up/Down (or j/k). Enter to confirm. Esc/Ctrl-C to cancel.
 ```
@@ -203,9 +203,9 @@ Move with arrow keys and press Enter to switch. The selector starts on the activ
 
 The status column can show:
 
-- `ACTIVE` for the current clean worktree
-- `ACTIVE*` for the current dirty worktree
-- `DIRTY` for a non-current dirty worktree
+- `[CURRENT]` for the current clean worktree
+- `[CURRENT] [DIRTY]` for the current dirty worktree
+- `[DIRTY]` for a non-current dirty worktree
 
 `ww` ignores its own `.worktrees/` management directory when computing this status so the main worktree is not marked dirty just because linked worktrees exist.
 
@@ -227,8 +227,23 @@ ww list --verbose
 ```
 
 This prints the current worktree table without changing your shell directory.
+The human-readable `ww list` output uses a full Unicode box table. Interactive `ww` selection stays header-free so the picker remains compact.
 
-Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, and the status column uses the same `ACTIVE` / `ACTIVE*` / `DIRTY` markers as the interactive selector.
+Example:
+
+```text
+┌───────┬───────────────────┬────────┬──────────────────────────────────────────────────┐
+│ INDEX │ STATUS            │ BRANCH │ PATH                                             │
+├───────┼───────────────────┼────────┼──────────────────────────────────────────────────┤
+│ 1     │ [CURRENT]         │ main   │ /path/to/repo                                    │
+├───────┼───────────────────┼────────┼──────────────────────────────────────────────────┤
+│ 2     │ [DIRTY]           │ feat-a │ /path/to/repo/.worktrees/very/long/path/that/    │
+│       │                   │        │ wraps/inside/the/path/cell                       │
+└───────┴───────────────────┴────────┴──────────────────────────────────────────────────┘
+```
+
+Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, and the status column uses the same `[CURRENT]` / `[CURRENT] [DIRTY]` / `[DIRTY]` tags as the interactive selector.
+Long `PATH` values are wrapped inside the `PATH` cell instead of being truncated.
 
 Available helper-driven filters:
 

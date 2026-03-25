@@ -82,8 +82,9 @@ func SelectWorktreeWithFzf(ctx context.Context, items []worktree.Worktree, runne
 
 func formatFzfCandidates(items []worktree.Worktree) []byte {
 	var buf strings.Builder
+	branchWidth := HumanBranchWidth(items)
 	for _, item := range items {
-		fmt.Fprintf(&buf, "%d\t%s\t%s\t%s\n", item.Index, fzfStatus(item), item.BranchLabel, item.Path)
+		fmt.Fprintf(&buf, "%d\t%-*s\t%-*s\t%s\n", item.Index, humanStatusWidth, fzfStatus(item), branchWidth, item.BranchLabel, item.Path)
 	}
 	return []byte(buf.String())
 }

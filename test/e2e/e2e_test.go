@@ -127,7 +127,7 @@ func TestCLIListsWorktrees(t *testing.T) {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
 	}
 
-	if !strings.Contains(stdout.String(), "[1]") || !strings.Contains(stdout.String(), "/.worktrees/alpha") || !strings.Contains(stdout.String(), "ACTIVE") {
+	if !strings.Contains(stdout.String(), "│ INDEX │ STATUS") || !strings.Contains(stdout.String(), "│ 1     │ [CURRENT]") || !strings.Contains(stdout.String(), "/.worktrees/") || !strings.Contains(stdout.String(), "alpha") {
 		t.Fatalf("expected human-readable list output, got %q", stdout.String())
 	}
 }
@@ -160,7 +160,7 @@ func TestCLIListStaysInCreationOrderAfterSwitch(t *testing.T) {
 	}
 
 	got := stdout.String()
-	if strings.Index(got, "ACTIVE main") > strings.Index(got, "/.worktrees/alpha") {
+	if strings.Index(got, "│ 1     │ [CURRENT]") > strings.Index(got, "/.worktrees/alpha") {
 		t.Fatalf("expected main before alpha in creation ordering, got %q", got)
 	}
 	if strings.Index(got, "/.worktrees/alpha") > strings.Index(got, "/.worktrees/beta") {
@@ -186,11 +186,11 @@ func TestCLIListShowsDirtyWorktrees(t *testing.T) {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "DIRTY  alpha") {
+	if !strings.Contains(stdout.String(), "│ 2     │ [DIRTY]           │ alpha") {
 		t.Fatalf("expected dirty alpha in list output, got %q", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "ACTIVE main") {
-		t.Fatalf("expected active main in list output, got %q", stdout.String())
+	if !strings.Contains(stdout.String(), "│ 1     │ [CURRENT]         │ main") {
+		t.Fatalf("expected current main in list output, got %q", stdout.String())
 	}
 }
 

@@ -50,8 +50,9 @@ func (OSRawMode) Prepare(in io.Reader) (func(), error) {
 
 func RenderTUI(w io.Writer, items []worktree.Worktree, active int) {
 	fmt.Fprint(w, "\x1b[H\x1b[2J")
+	branchWidth := HumanBranchWidth(items)
 	for i, item := range items {
-		fmt.Fprintln(w, formatTUIRow(item, i == active))
+		fmt.Fprintln(w, formatTUIRow(item, i == active, branchWidth))
 	}
 	fmt.Fprintln(w)
 	fmt.Fprint(w, "Use Up/Down (or j/k). Enter to confirm. Esc/Ctrl-C to cancel.")

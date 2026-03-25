@@ -212,14 +212,20 @@ func TestRunListPrintsMenuWithoutPrompt(t *testing.T) {
 	if stdout.String() == "" {
 		t.Fatal("expected list output on stdout")
 	}
-	if strings.Index(stdout.String(), "ACTIVE main /repo") > strings.Index(stdout.String(), "/repo/.worktrees/alpha") {
+	if !strings.Contains(stdout.String(), "│ INDEX │ STATUS") || !strings.Contains(stdout.String(), "│ PATH") {
+		t.Fatalf("expected list header in output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "┌") || !strings.Contains(stdout.String(), "┼") || !strings.Contains(stdout.String(), "┘") {
+		t.Fatalf("expected list divider in output, got %q", stdout.String())
+	}
+	if strings.Index(stdout.String(), "│ 1     │ [CURRENT]         │ main") > strings.Index(stdout.String(), "/repo/.worktrees/alpha") {
 		t.Fatalf("expected main before alpha in creation ordering, got %q", stdout.String())
 	}
 	if strings.Index(stdout.String(), "/repo/.worktrees/alpha") > strings.Index(stdout.String(), "/repo/.worktrees/beta") {
 		t.Fatalf("expected alpha before beta in creation ordering, got %q", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "[1] ACTIVE main /repo") {
-		t.Fatalf("expected ACTIVE status in list output, got %q", stdout.String())
+	if !strings.Contains(stdout.String(), "│ 1     │ [CURRENT]         │ main") || !strings.Contains(stdout.String(), "│ /repo") {
+		t.Fatalf("expected CURRENT status in list output, got %q", stdout.String())
 	}
 	if bytes.Contains(stdout.Bytes(), []byte("Select a worktree")) {
 		t.Fatalf("expected no prompt in list output, got %q", stdout.String())
@@ -247,10 +253,13 @@ func TestRunListShowsDirtyStatuses(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
-	if !strings.Contains(stdout.String(), "[1] ACTIVE* main /repo") {
+	if !strings.Contains(stdout.String(), "│ INDEX │ STATUS") {
+		t.Fatalf("expected list header in output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "│ 1     │ [CURRENT] [DIRTY] │ main") || !strings.Contains(stdout.String(), "│ /repo") {
 		t.Fatalf("expected dirty active status in list output, got %q", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "[2] DIRTY  alpha /repo/.worktrees/alpha") {
+	if !strings.Contains(stdout.String(), "│ 2     │ [DIRTY]           │ alpha") || !strings.Contains(stdout.String(), "/repo/.worktrees/alpha") {
 		t.Fatalf("expected dirty non-current status in list output, got %q", stdout.String())
 	}
 	if stderr.Len() != 0 {
@@ -734,8 +743,13 @@ func TestRunListKeepsDefaultOutputFocusedOnWorktrees(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
-	if !strings.Contains(stdout.String(), "alpha /repo/.worktrees/alpha") ||
-		!strings.Contains(stdout.String(), "beta /repo/.worktrees/beta") {
+	if !strings.Contains(stdout.String(), "│ INDEX │ STATUS") {
+		t.Fatalf("expected list header in output, got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "│ 1     │                   │ alpha") ||
+		!strings.Contains(stdout.String(), "/repo/.worktrees/alpha") ||
+		!strings.Contains(stdout.String(), "│ 2     │                   │ beta") ||
+		!strings.Contains(stdout.String(), "/repo/.worktrees/beta") {
 		t.Fatalf("expected worktree rows in list output, got %q", stdout.String())
 	}
 	if strings.Contains(stdout.String(), "task=") || strings.Contains(stdout.String(), "label=") {
@@ -2009,7 +2023,7 @@ func TestRunSwitchPathInteractiveSelectionWritesTUIToStderrAndPathToStdout(t *te
 	if !bytes.Contains(stderr.Bytes(), []byte("Enter to confirm")) {
 		t.Fatalf("expected tui instructions on stderr, got %q", stderr.String())
 	}
-	if !bytes.Contains(stderr.Bytes(), []byte("* [1]        alpha /repo/.worktrees/alpha")) {
+	if !bytes.Contains(stderr.Bytes(), []byte("* [1]                   alpha  /repo/.worktrees/alpha")) {
 		t.Fatalf("expected active row on stderr, got %q", stderr.String())
 	}
 	if deps.touched.repoKey != "/repo/.git" || deps.touched.path != "/repo/.worktrees/alpha" {

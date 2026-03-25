@@ -311,23 +311,33 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 		return writeJSONSuccess(out, "list", payload)
 	}
 
+	tableEntries := make([]ui.ListTableEntry, 0, len(entries))
 	for _, entry := range entries {
-		item := entry.item
-		fmt.Fprintf(out, "[%d] %-6s %s %s", item.Index, ui.StatusLabel(item), item.BranchLabel, item.Path)
-		if cfg.verbose {
-			if entry.meta.Label != "" {
-				fmt.Fprintf(out, " label=%s", entry.meta.Label)
-			}
-			if entry.meta.TTL != "" {
-				fmt.Fprintf(out, " ttl=%s", entry.meta.TTL)
-			}
-			if entry.meta.LastUsedAt != 0 {
-				fmt.Fprintf(out, " last_used_at=%d", entry.meta.LastUsedAt)
-			}
-		}
-		fmt.Fprintln(out)
+		tableEntries = append(tableEntries, ui.ListTableEntry{
+			Worktree: entry.item,
+			Detail:   listVerboseDetail(entry.meta, cfg.verbose),
+		})
 	}
+	fmt.Fprintln(out, ui.FormatListTable(tableEntries))
 	return 0
+}
+
+func listVerboseDetail(meta state.WorktreeMetadata, verbose bool) string {
+	if !verbose {
+		return ""
+	}
+
+	parts := make([]string, 0, 3)
+	if meta.Label != "" {
+		parts = append(parts, "label="+meta.Label)
+	}
+	if meta.TTL != "" {
+		parts = append(parts, "ttl="+meta.TTL)
+	}
+	if meta.LastUsedAt != 0 {
+		parts = append(parts, fmt.Sprintf("last_used_at=%d", meta.LastUsedAt))
+	}
+	return strings.Join(parts, "  ")
 }
 
 type newPathConfig struct {

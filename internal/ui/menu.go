@@ -11,36 +11,66 @@ import (
 	"ww/internal/worktree"
 )
 
+const humanStatusWidth = len("[CURRENT] [DIRTY]")
+const humanIndexHeader = "INDEX"
+const humanStatusHeader = "STATUS"
+const humanBranchHeader = "BRANCH"
+const humanPathHeader = "PATH"
+
+func normalizedBranchWidth(branchWidth int) int {
+	if branchWidth < len(humanBranchHeader) {
+		return len(humanBranchHeader)
+	}
+	return branchWidth
+}
+
 func RenderMenu(w io.Writer, items []worktree.Worktree) {
+	branchWidth := HumanBranchWidth(items)
 	for _, item := range items {
-		fmt.Fprintln(w, formatMenuRow(item))
+		fmt.Fprintln(w, formatMenuRow(item, branchWidth))
 	}
 	fmt.Fprint(w, "Select a worktree [number]: ")
 }
 
-func formatMenuRow(item worktree.Worktree) string {
-	return fmt.Sprintf("[%d] %-6s %s %s", item.Index, StatusLabel(item), item.BranchLabel, item.Path)
+func HumanBranchWidth(items []worktree.Worktree) int {
+	width := 0
+	for _, item := range items {
+		if len(item.BranchLabel) > width {
+			width = len(item.BranchLabel)
+		}
+	}
+	return width
 }
 
-func formatTUIRow(item worktree.Worktree, active bool) string {
+func FormatHumanHeader(branchWidth int) string {
+	branchWidth = normalizedBranchWidth(branchWidth)
+	return fmt.Sprintf("%-5s %-*s %-*s %s", humanIndexHeader, humanStatusWidth, humanStatusHeader, branchWidth, humanBranchHeader, humanPathHeader)
+}
+
+func FormatHumanDivider(branchWidth int) string {
+	branchWidth = normalizedBranchWidth(branchWidth)
+	return fmt.Sprintf("%-5s %-*s %-*s %s", strings.Repeat("-", len(humanIndexHeader)), humanStatusWidth, strings.Repeat("-", humanStatusWidth), branchWidth, strings.Repeat("-", branchWidth), strings.Repeat("-", len(humanPathHeader)))
+}
+
+func FormatHumanRow(item worktree.Worktree, branchWidth int) string {
+	branchWidth = normalizedBranchWidth(branchWidth)
+	return fmt.Sprintf("[%d] %-*s %-*s %s", item.Index, humanStatusWidth, StatusText(item), branchWidth, item.BranchLabel, item.Path)
+}
+
+func formatMenuRow(item worktree.Worktree, branchWidth int) string {
+	return FormatHumanRow(item, branchWidth)
+}
+
+func formatTUIRow(item worktree.Worktree, active bool, branchWidth int) string {
 	prefix := " "
 	if active {
 		prefix = "*"
 	}
-	return fmt.Sprintf("%s %s", prefix, formatMenuRow(item))
+	return fmt.Sprintf("%s %s", prefix, formatMenuRow(item, branchWidth))
 }
 
 func StatusLabel(item worktree.Worktree) string {
-	if item.IsCurrent {
-		if item.IsDirty {
-			return "ACTIVE*"
-		}
-		return "ACTIVE"
-	}
-	if item.IsDirty {
-		return "DIRTY"
-	}
-	return ""
+	return StatusText(item)
 }
 
 func ReadSelection(in io.Reader, errOut io.Writer, max int) (int, error) {
