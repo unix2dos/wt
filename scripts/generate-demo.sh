@@ -8,7 +8,7 @@ TOOLS_BIN_DIR="$TOOLS_DIR/bin"
 ASSETS_DIR="$ROOT_DIR/docs/assets"
 ASCIINEMA_BIN="$TOOLS_BIN_DIR/asciinema"
 FZF_BIN="$TOOLS_BIN_DIR/fzf"
-HELPER_BIN="$TOOLS_BIN_DIR/ww-helper-demo"
+HELPER_BIN="$TOOLS_BIN_DIR/ww-helper"
 EXPECT_BIN="/usr/bin/expect"
 CAST_FILE="$ASSETS_DIR/ww-demo.cast"
 SVG_FILE="$ASSETS_DIR/ww-demo.svg"
@@ -47,8 +47,17 @@ git -C "$DEMO_REPO" config user.email "ww-demo@example.com"
 printf '# ww demo repo\n' >"$DEMO_REPO/README.md"
 git -C "$DEMO_REPO" add README.md
 git -C "$DEMO_REPO" commit -m "init demo repo" >/dev/null
-git -C "$DEMO_REPO" worktree add "$DEMO_REPO/.worktrees/feat-a" -b feat-a >/dev/null
-git -C "$DEMO_REPO" worktree add "$DEMO_REPO/.worktrees/hotfix" -b hotfix >/dev/null
+
+create_seed_worktree() {
+  local name="$1"
+  (
+    cd "$DEMO_REPO"
+    HOME="$DEMO_HOME" XDG_STATE_HOME="$STATE_HOME" "$HELPER_BIN" new-path --json "$name" >/dev/null
+  )
+}
+
+create_seed_worktree "feat-a"
+create_seed_worktree "fix-cache"
 
 export WW_DEMO_REPO="$DEMO_REPO"
 export WW_DEMO_HELPER_BIN="$HELPER_BIN"
@@ -56,11 +65,14 @@ export WW_DEMO_SHELL_FILE="$ROOT_DIR/shell/ww.sh"
 export WW_DEMO_HOME="$DEMO_HOME"
 export WW_DEMO_STATE_HOME="$STATE_HOME"
 export WW_DEMO_PATH="$TOOLS_BIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin"
-export WW_DEMO_KEYSTROKE_DELAY_MS="${WW_DEMO_KEYSTROKE_DELAY_MS:-75}"
-export WW_DEMO_STEP_DELAY_MS="${WW_DEMO_STEP_DELAY_MS:-450}"
-export WW_DEMO_FZF_FOCUS_DELAY_MS="${WW_DEMO_FZF_FOCUS_DELAY_MS:-500}"
-export WW_DEMO_FZF_QUERY_SETTLE_MS="${WW_DEMO_FZF_QUERY_SETTLE_MS:-400}"
-export WW_DEMO_CONFIRM_DELAY_MS="${WW_DEMO_CONFIRM_DELAY_MS:-350}"
+export WW_DEMO_KEYSTROKE_DELAY_MS="${WW_DEMO_KEYSTROKE_DELAY_MS:-180}"
+export WW_DEMO_STEP_DELAY_MS="${WW_DEMO_STEP_DELAY_MS:-1000}"
+export WW_DEMO_FZF_FOCUS_DELAY_MS="${WW_DEMO_FZF_FOCUS_DELAY_MS:-2600}"
+export WW_DEMO_FZF_KEYSTROKE_DELAY_MS="${WW_DEMO_FZF_KEYSTROKE_DELAY_MS:-300}"
+export WW_DEMO_FZF_MOVE_DELAY_MS="${WW_DEMO_FZF_MOVE_DELAY_MS:-1400}"
+export WW_DEMO_FZF_REFRESH_DELAY_MS="${WW_DEMO_FZF_REFRESH_DELAY_MS:-800}"
+export WW_DEMO_FZF_QUERY_SETTLE_MS="${WW_DEMO_FZF_QUERY_SETTLE_MS:-1200}"
+export WW_DEMO_CONFIRM_DELAY_MS="${WW_DEMO_CONFIRM_DELAY_MS:-650}"
 
 IDLE_TIME_LIMIT="${WW_DEMO_IDLE_TIME_LIMIT:-1.1}"
 

@@ -124,8 +124,11 @@ func TestPagesDemoContract(t *testing.T) {
 	if !strings.Contains(indexHTML, "ww Demo") {
 		t.Fatalf("expected Pages demo to show a visible title")
 	}
-	if !strings.Contains(indexHTML, "`switch`, `ww new`, and safe `ww rm`") {
-		t.Fatalf("expected Pages demo copy to match the refreshed flow")
+	if !strings.Contains(indexHTML, "`fzf` switch, `ww list`, `ww new`, `ww check`, safe removal, cleanup review") {
+		t.Fatalf("expected Pages demo copy to describe the workflow overview")
+	}
+	if !strings.Contains(indexHTML, "`ww-helper --json` tail for automation") {
+		t.Fatalf("expected Pages demo copy to mention the automation tail")
 	}
 	if !strings.Contains(indexHTML, "speed: 0.6") {
 		t.Fatalf("expected Pages demo to default to slower playback")
@@ -164,8 +167,8 @@ func TestPagesDemoContract(t *testing.T) {
 	if !strings.Contains(expectScript, "ww rm feat-demo") {
 		t.Fatalf("expected expect demo script to exercise ww rm")
 	}
-	if !strings.Contains(expectScript, "send_text \"feat-a\"") {
-		t.Fatalf("expected expect demo script to drive the fzf query path")
+	if !strings.Contains(expectScript, "send_nav_up") || !strings.Contains(expectScript, "send_nav_down") {
+		t.Fatalf("expected expect demo script to drive visible picker navigation")
 	}
 	if strings.Contains(expectScript, "Use Up/Down") {
 		t.Fatalf("expected expect demo script to stop driving the built-in selector")

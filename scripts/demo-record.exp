@@ -25,13 +25,25 @@ proc await_prompt {} {
   expect "ww>"
 }
 
+proc send_text_with_delay {text delay_ms} {
+  foreach char [split $text ""] {
+    send -- $char
+    after $delay_ms
+  }
+}
+
 proc send_text {text} {
   global keystroke_delay_ms
 
-  foreach char [split $text ""] {
-    send -- $char
-    after $keystroke_delay_ms
-  }
+  send_text_with_delay $text $keystroke_delay_ms
+}
+
+proc send_nav_up {} {
+  send -- "k"
+}
+
+proc send_nav_down {} {
+  send -- "j"
 }
 
 set demo_repo [need_env "WW_DEMO_REPO"]
@@ -43,6 +55,8 @@ set demo_path [need_env "WW_DEMO_PATH"]
 set keystroke_delay_ms [env_or_default "WW_DEMO_KEYSTROKE_DELAY_MS" 90]
 set step_delay_ms [env_or_default "WW_DEMO_STEP_DELAY_MS" 650]
 set fzf_focus_delay_ms [env_or_default "WW_DEMO_FZF_FOCUS_DELAY_MS" 850]
+set fzf_keystroke_delay_ms [env_or_default "WW_DEMO_FZF_KEYSTROKE_DELAY_MS" 90]
+set fzf_move_delay_ms [env_or_default "WW_DEMO_FZF_MOVE_DELAY_MS" 650]
 set fzf_query_settle_ms [env_or_default "WW_DEMO_FZF_QUERY_SETTLE_MS" 650]
 set confirm_delay_ms [env_or_default "WW_DEMO_CONFIRM_DELAY_MS" 500]
 
@@ -62,37 +76,53 @@ pause_for $step_delay_ms
 send_text "ww"
 send -- "\r"
 expect -re {Select a worktree> ?}
+expect "fix-cache"
 pause_for $fzf_focus_delay_ms
-send_text "feat-a"
+send_nav_up
+pause_for $fzf_move_delay_ms
+send_nav_down
+pause_for $fzf_move_delay_ms
+send_nav_up
 pause_for $fzf_query_settle_ms
 send -- "\r"
 
 await_prompt
 pause_for $step_delay_ms
-send_text "git branch --show-current"
+send_text "ww list"
 send -- "\r"
-expect "feat-a"
-
 await_prompt
+
 pause_for $step_delay_ms
 send_text "ww new feat-demo"
 send -- "\r"
 
 await_prompt
 pause_for $step_delay_ms
-send_text "git branch --show-current"
+send_text "ww check"
 send -- "\r"
-expect "feat-demo"
+expect "Branch: feat-demo"
+expect "Changes: clean"
 
 await_prompt
 pause_for $step_delay_ms
-send_text "ww main"
+send_text "ww"
+send -- "\r"
+expect -re {Select a worktree> ?}
+expect "feat-demo"
+pause_for $fzf_focus_delay_ms
+send_nav_down
+pause_for $fzf_move_delay_ms
+send_nav_down
+pause_for $fzf_move_delay_ms
+send_nav_down
+pause_for $fzf_query_settle_ms
 send -- "\r"
 
 await_prompt
 pause_for $step_delay_ms
 send_text "ww rm feat-demo"
 send -- "\r"
+expect "Selected: feat-demo"
 expect "✅ Safe to delete"
 expect -re {Delete this worktree\? \[y/N\]: ?}
 pause_for $confirm_delay_ms
@@ -102,6 +132,44 @@ expect "removed worktree"
 expect "deleted branch"
 
 await_prompt
+pause_for $step_delay_ms
+send_text "ww rm --cleanup"
+send -- "\r"
+expect "Cleanup mode: review workspaces and remove the ones you no longer need."
+expect "2 workspaces available: 2 safe, 0 review, 0 blocked."
+expect -re {Select a workspace to review \[number, Enter to finish\]: ?}
+pause_for $confirm_delay_ms
+send_text "2"
+send -- "\r"
+expect "Selected: fix-cache"
+expect "✅ Safe to delete"
+expect -re {Delete this worktree\? \[y/N\]: ?}
+pause_for $confirm_delay_ms
+send_text "y"
+send -- "\r"
+expect "removed worktree"
+expect "deleted branch"
+expect -re {Select a workspace to review \[number, Enter to finish\]: ?}
+pause_for $confirm_delay_ms
+send -- "\r"
+expect "Cleanup finished. Removed 1 workspace. 1 workspace still listed."
+
+await_prompt
+pause_for $step_delay_ms
+send_text "ww-helper list --json"
+send -- "\r"
+await_prompt
+
+pause_for $step_delay_ms
+send_text "ww-helper new-path --json --label agent:codex --ttl 24h feat-agent"
+send -- "\r"
+await_prompt
+
+pause_for $step_delay_ms
+send_text "ww-helper rm --json --non-interactive feat-agent"
+send -- "\r"
+await_prompt
+
 pause_for $step_delay_ms
 send_text "exit"
 send -- "\r"

@@ -4,13 +4,39 @@ set -euo pipefail
 
 tty_path="${FZF_TTY:-/dev/tty}"
 exec 3<>"$tty_path"
+refresh_delay_ms="${WW_DEMO_FZF_REFRESH_DELAY_MS:-0}"
+prompt="Select a worktree> "
+use_tac=0
+load_pos=1
 
 declare -a candidates=()
 declare -a filtered=()
 
+for arg in "$@"; do
+  if [[ "$arg" == "--tac" ]]; then
+    use_tac=1
+    continue
+  fi
+  if [[ "$arg" == --prompt=* ]]; then
+    prompt="${arg#--prompt=}"
+    continue
+  fi
+  if [[ "$arg" =~ ^--bind=load:pos\(([0-9]+)\)$ ]]; then
+    load_pos="${BASH_REMATCH[1]}"
+  fi
+done
+
 while IFS= read -r line; do
   candidates+=("$line")
 done
+
+if (( use_tac == 1 )); then
+  declare -a reversed=()
+  for ((i=${#candidates[@]}-1; i>=0; i--)); do
+    reversed+=("${candidates[$i]}")
+  done
+  candidates=("${reversed[@]}")
+fi
 
 old_stty="$(stty -g <&3)"
 query=""
@@ -50,33 +76,48 @@ print_candidate() {
   local index status branch path
 
   IFS=$'\t' read -r index status branch path <<<"$candidate"
-  printf "%s  %-6s %-8s %s" "$index" "${status:-}" "$branch" "$path"
+  printf "%s  %-18s %-10s %s" "$index" "${status:-}" "$branch" "$path"
 }
 
 render() {
-  printf '\033[?1049h\033[H\033[2J\033[?25l' >&3
-  printf 'Select a worktree> %s\n\n' "$query" >&3
+  local screen
+  local row
+  local prefix
+
+  screen=$'\033[?1049h\033[H\033[2J\033[?25l'
+  screen+="${prompt}${query}"$'\n\n'
 
   if (( ${#filtered[@]} == 0 )); then
-    printf '  no matches\n' >&3
+    screen+=$'  no matches\n'
+    printf '%s' "$screen" >&3
     return
   fi
 
   local i
   for i in "${!filtered[@]}"; do
     if (( i == selected )); then
-      printf '> ' >&3
+      prefix="> "
     else
-      printf '  ' >&3
+      prefix="  "
     fi
-    print_candidate "${filtered[$i]}" >&3
-    printf '\n' >&3
+    row="$(print_candidate "${filtered[$i]}")"
+    screen+="${prefix}${row}"$'\n'
   done
+
+  printf '%s' "$screen" >&3
 }
 
 stty -echo -icanon min 1 time 0 <&3
 filter_candidates
+if (( load_pos > 0 && load_pos <= ${#filtered[@]} )); then
+  selected=$((load_pos - 1))
+fi
 render
+
+if [[ "$refresh_delay_ms" =~ ^[0-9]+$ ]] && (( refresh_delay_ms > 0 )); then
+  sleep "$(awk "BEGIN { printf \"%.3f\", $refresh_delay_ms / 1000 }")"
+  render
+fi
 
 while IFS= read -r -s -n1 key <&3; do
   case "$key" in
@@ -92,6 +133,16 @@ while IFS= read -r -s -n1 key <&3; do
       ;;
     $'\003')
       exit 130
+      ;;
+    "k")
+      if (( selected > 0 )); then
+        ((selected--))
+      fi
+      ;;
+    "j")
+      if (( selected + 1 < ${#filtered[@]} )); then
+        ((selected++))
+      fi
       ;;
     $'\033')
       rest=""

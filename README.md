@@ -8,11 +8,15 @@ Fast worktree switching for safer parallel work.
 
 [![ww demo](docs/assets/ww-demo.svg)](https://unix2dos.github.io/ww/)
 
-The demo still shows the core loop in under half a minute:
+The demo is now a workflow overview in about a minute, with a short `ww-helper --json` tail:
 
 - switch into an existing worktree with the `fzf` fast path
+- inspect the current workspace set with `ww list`
 - create a fresh branch workspace with `ww new feat-demo`
-- remove that temporary workspace with safe `ww rm`
+- check the active workspace state with `ww check`
+- remove the temporary workspace with safe `ww rm`
+- review stale workspaces with `ww rm --cleanup`
+- end with a quick machine-readable `ww-helper --json` pass
 
 ## Why ww
 
@@ -65,7 +69,7 @@ Current machine-readable commands:
 
 ```bash
 ww-helper list --json
-ww-helper new-path --json --label agent:claude-code --ttl 24h feat-demo
+ww-helper new-path --json --label agent:codex --ttl 24h feat-demo
 ww-helper gc --ttl-expired --dry-run --json
 ww-helper rm --json --non-interactive feat-demo
 ```
