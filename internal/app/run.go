@@ -584,12 +584,9 @@ func runGC(ctx context.Context, args []string, out io.Writer, errOut io.Writer, 
 }
 
 type removeConfig struct {
-	force          bool
-	cleanup        bool
-	json           bool
-	nonInteractive bool
-	base           string
-	target         string
+	force  bool
+	json   bool
+	target string
 }
 
 type removalCandidate struct {
@@ -631,7 +628,7 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 		})
 	}
 
-	baseBranch := cfg.base
+	baseBranch := ""
 	if baseBranch == "" {
 		baseBranch, err = deps.DefaultBranch(ctx)
 		if err != nil {
@@ -648,12 +645,8 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 		previewed = append(previewed, enrichRemovalCandidate(ctx, deps, item, preview, metadata[item.Path]))
 	}
 
-	if cfg.cleanup {
-		return runRemoveCleanup(ctx, cfg, in, out, errOut, deps, previewed, baseBranch)
-	}
-
 	selected := removalCandidate{}
-	if cfg.json || cfg.nonInteractive {
+	if cfg.json {
 		selected, err = selectRemovalCandidateNonInteractive(items, previewed, cfg.target)
 		if err != nil {
 			return writeCommandError("rm", out, errOut, cfg.json, err)
@@ -792,22 +785,10 @@ func parseRemoveArgs(args []string) (removeConfig, error) {
 	var cfg removeConfig
 	for i := 0; i < len(args); i++ {
 		switch arg := args[i]; {
-		case arg == "--cleanup":
-			cfg.cleanup = true
 		case arg == "--force":
 			cfg.force = true
 		case arg == "--json":
 			cfg.json = true
-		case arg == "--non-interactive":
-			cfg.nonInteractive = true
-		case arg == "--base":
-			if i+1 >= len(args) {
-				return cfg, appError{Code: "INVALID_ARGUMENTS", Message: "missing value for --base", ExitCode: 2}
-			}
-			i++
-			cfg.base = args[i]
-		case strings.HasPrefix(arg, "--base="):
-			cfg.base = strings.TrimPrefix(arg, "--base=")
 		case strings.HasPrefix(arg, "-"):
 			return cfg, appError{Code: "INVALID_ARGUMENTS", Message: fmt.Sprintf("unknown option: %s", arg), ExitCode: 2}
 		default:
@@ -815,16 +796,6 @@ func parseRemoveArgs(args []string) (removeConfig, error) {
 				return cfg, appError{Code: "INVALID_ARGUMENTS", Message: fmt.Sprintf("unexpected extra arguments: %s", strings.Join(args[i:], " ")), ExitCode: 2}
 			}
 			cfg.target = arg
-		}
-	}
-	if cfg.cleanup {
-		switch {
-		case cfg.target != "":
-			return cfg, appError{Code: "INVALID_ARGUMENTS", Message: "--cleanup does not accept a target", ExitCode: 2}
-		case cfg.json:
-			return cfg, appError{Code: "INVALID_ARGUMENTS", Message: "--cleanup cannot be combined with --json", ExitCode: 2}
-		case cfg.nonInteractive:
-			return cfg, appError{Code: "INVALID_ARGUMENTS", Message: "--cleanup cannot be combined with --non-interactive", ExitCode: 2}
 		}
 	}
 	return cfg, nil

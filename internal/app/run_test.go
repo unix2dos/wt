@@ -2219,6 +2219,42 @@ func TestRunSwitchPathInteractiveSelectionReturnsNonZeroOnEOFWithoutSelection(t 
 	}
 }
 
+func TestRunRmRejectsCleanupFlag(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := Run(context.Background(), []string{"rm", "--cleanup"}, strings.NewReader(""), stdout, stderr, fakeDeps{})
+	if code != 2 {
+		t.Fatalf("expected exit code 2 for unknown flag, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "unknown option: --cleanup") {
+		t.Fatalf("expected unknown option error, got %q", stderr.String())
+	}
+}
+
+func TestRunRmRejectsBaseFlag(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := Run(context.Background(), []string{"rm", "--base", "main"}, strings.NewReader(""), stdout, stderr, fakeDeps{})
+	if code != 2 {
+		t.Fatalf("expected exit code 2 for unknown flag, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "unknown option: --base") {
+		t.Fatalf("expected unknown option error, got %q", stderr.String())
+	}
+}
+
+func TestRunRmRejectsNonInteractiveFlag(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := Run(context.Background(), []string{"rm", "--non-interactive", "alpha"}, strings.NewReader(""), stdout, stderr, fakeDeps{})
+	if code != 2 {
+		t.Fatalf("expected exit code 2 for unknown flag, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "unknown option: --non-interactive") {
+		t.Fatalf("expected unknown option error, got %q", stderr.String())
+	}
+}
+
 type envelope struct {
 	OK      bool            `json:"ok"`
 	Command string          `json:"command"`
