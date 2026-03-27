@@ -2020,6 +2020,48 @@ func TestRunRmJSONNoTargetMultipleCandidatesReturnsAmbiguous(t *testing.T) {
 	}
 }
 
+func TestRunRmResultBranchKeptNotMerged(t *testing.T) {
+	var buf bytes.Buffer
+	writeRemoveHuman(&buf, git.RemoveResult{
+		WorktreePath:     "/repo/.worktrees/fix-header",
+		Branch:           "fix/header",
+		BaseBranch:       "main",
+		RemovedWorktree:  true,
+		KeptBranchReason: "not merged",
+	})
+	expected := "Removed fix/header (branch kept, not merged)\n"
+	if buf.String() != expected {
+		t.Fatalf("expected %q, got %q", expected, buf.String())
+	}
+}
+
+func TestRunRmResultDetached(t *testing.T) {
+	var buf bytes.Buffer
+	writeRemoveHuman(&buf, git.RemoveResult{
+		WorktreePath:    "/repo/.worktrees/agent-tmp",
+		RemovedWorktree: true,
+	})
+	expected := "Removed agent-tmp\n"
+	if buf.String() != expected {
+		t.Fatalf("expected %q, got %q", expected, buf.String())
+	}
+}
+
+func TestRunRmResultBranchDeleted(t *testing.T) {
+	var buf bytes.Buffer
+	writeRemoveHuman(&buf, git.RemoveResult{
+		WorktreePath:    "/repo/.worktrees/alpha",
+		Branch:          "alpha",
+		BaseBranch:      "main",
+		RemovedWorktree: true,
+		DeletedBranch:   true,
+	})
+	expected := "Removed alpha (branch deleted)\n"
+	if buf.String() != expected {
+		t.Fatalf("expected %q, got %q", expected, buf.String())
+	}
+}
+
 type envelope struct {
 	OK      bool            `json:"ok"`
 	Command string          `json:"command"`
