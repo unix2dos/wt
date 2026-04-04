@@ -52,6 +52,9 @@ func ListWorktrees(ctx context.Context, runner Runner) (string, []worktree.Workt
 		items[i].IsCurrent = filepath.Clean(items[i].Path) == filepath.Clean(currentPath)
 	}
 	annotateCreationTimes(items)
+	// IsDirty is set here as a baseline. AnnotateExtendedStatus (called separately,
+	// best-effort) re-derives it from detailed file change counts. The duplication is
+	// intentional: if AnnotateExtendedStatus fails or is skipped, IsDirty is still correct.
 	for i := range items {
 		dirty, err := worktreeDirty(ctx, runner, items[i].Path)
 		if err != nil {

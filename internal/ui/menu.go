@@ -35,24 +35,6 @@ func HumanBranchWidth(items []worktree.Worktree) int {
 	return width
 }
 
-// FormatHumanHeader returns the header row for list-table output.
-func FormatHumanHeader(branchWidth int) string {
-	branchWidth = normalizedBranchWidth(branchWidth)
-	return fmt.Sprintf("%-5s %-*s %-*s %s", humanIndexHeader, humanStatusWidth, humanStatusHeader, branchWidth, humanBranchHeader, humanPathHeader)
-}
-
-// FormatHumanDivider returns the divider row for list-table output.
-func FormatHumanDivider(branchWidth int) string {
-	branchWidth = normalizedBranchWidth(branchWidth)
-	return fmt.Sprintf("%-5s %-*s %-*s %s", strings.Repeat("-", len(humanIndexHeader)), humanStatusWidth, strings.Repeat("-", humanStatusWidth), branchWidth, strings.Repeat("-", branchWidth), strings.Repeat("-", len(humanPathHeader)))
-}
-
-// FormatHumanRow returns a single row for list-table output.
-func FormatHumanRow(item worktree.Worktree, branchWidth int) string {
-	branchWidth = normalizedBranchWidth(branchWidth)
-	return fmt.Sprintf("[%d] %-*s %-*s %s", item.Index, humanStatusWidth, StatusText(item), branchWidth, item.BranchLabel, item.Path)
-}
-
 // formatTUIRow is used by tui.go.
 func formatTUIRow(item worktree.Worktree, active bool, branchWidth, abWidth, fcWidth int) string {
 	prefix := " "
@@ -132,14 +114,8 @@ func formatSummary(items []worktree.Worktree) string {
 	}
 
 	k := len(safeIndices)
-	var safeNoun string
-	if k == 1 {
-		safeNoun = "safe to remove"
-	} else {
-		safeNoun = "safe to remove"
-	}
 	hint := fmt.Sprintf("ww rm %s", safeIndices[0])
-	return fmt.Sprintf("%s · %d %s (%s)", base, k, safeNoun, hint)
+	return fmt.Sprintf("%s · %d safe to remove (%s)", base, k, hint)
 }
 
 // formatEnhancedMenuRow builds one row of the enhanced menu with visual-width-aware padding.

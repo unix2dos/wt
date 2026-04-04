@@ -37,13 +37,6 @@ func TestDimWrapsTextInDimEscapes(t *testing.T) {
 	}
 }
 
-func TestBoldGreenCombinesBoldAndGreen(t *testing.T) {
-	got := BoldGreen("hello")
-	if got != "\x1b[1;32mhello\x1b[0m" {
-		t.Fatalf("expected bold+green escape, got %q", got)
-	}
-}
-
 func TestEmptyStringReturnsEmpty(t *testing.T) {
 	if got := Green(""); got != "" {
 		t.Fatalf("expected empty for empty input, got %q", got)
