@@ -53,18 +53,13 @@ func FormatHumanRow(item worktree.Worktree, branchWidth int) string {
 	return fmt.Sprintf("[%d] %-*s %-*s %s", item.Index, humanStatusWidth, StatusText(item), branchWidth, item.BranchLabel, item.Path)
 }
 
-// formatMenuRow is kept for tui.go backward compat.
-func formatMenuRow(item worktree.Worktree, branchWidth int) string {
-	return FormatHumanRow(item, branchWidth)
-}
-
 // formatTUIRow is used by tui.go.
-func formatTUIRow(item worktree.Worktree, active bool, branchWidth int) string {
+func formatTUIRow(item worktree.Worktree, active bool, branchWidth, abWidth, fcWidth int) string {
 	prefix := " "
 	if active {
 		prefix = "*"
 	}
-	return fmt.Sprintf("%s %s", prefix, formatMenuRow(item, branchWidth))
+	return fmt.Sprintf("%s%s", prefix, formatEnhancedMenuRow(item, branchWidth, abWidth, fcWidth))
 }
 
 // isSafeToRemove returns true if the worktree can be safely removed.
