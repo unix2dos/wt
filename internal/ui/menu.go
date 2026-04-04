@@ -11,7 +11,7 @@ import (
 	"ww/internal/worktree"
 )
 
-const humanStatusWidth = len("[CURRENT] [DIRTY]")
+const humanStatusWidth = len("[CURRENT] [MERGED]")
 const humanIndexHeader = "INDEX"
 const humanStatusHeader = "STATUS"
 const humanBranchHeader = "BRANCH"
@@ -67,10 +67,6 @@ func formatTUIRow(item worktree.Worktree, active bool, branchWidth int) string {
 		prefix = "*"
 	}
 	return fmt.Sprintf("%s %s", prefix, formatMenuRow(item, branchWidth))
-}
-
-func StatusLabel(item worktree.Worktree) string {
-	return StatusText(item)
 }
 
 func ReadSelection(in io.Reader, errOut io.Writer, max int) (int, error) {
