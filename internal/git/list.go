@@ -110,3 +110,64 @@ func cleanPathString(base, raw string) string {
 	}
 	return filepath.Clean(filepath.Join(base, raw))
 }
+
+// AnnotateExtendedStatus populates IsMerged, Ahead, Behind, Staged, Unstaged,
+// Untracked on each worktree item. Queries run concurrently. baseBranch is the
+// default branch name (e.g. "main"). IsDirty is derived from file change counts.
+func AnnotateExtendedStatus(ctx context.Context, runner Runner, items []worktree.Worktree, baseBranch string) error {
+	type result struct {
+		index int
+		err   error
+	}
+
+	ch := make(chan result, len(items))
+	for i := range items {
+		go func(idx int) {
+			item := &items[idx]
+
+			// File change counts (all worktrees)
+			staged, unstaged, untracked, err := FileChangeCounts(ctx, runner, item.Path)
+			if err != nil {
+				ch <- result{idx, err}
+				return
+			}
+			item.Staged = staged
+			item.Unstaged = unstaged
+			item.Untracked = untracked
+			item.IsDirty = staged+unstaged+untracked > 0
+
+			// Branch-level checks: skip for detached HEAD and the base branch itself
+			if item.IsDetached || item.BranchLabel == baseBranch || item.BranchRef == "" {
+				ch <- result{idx, nil}
+				return
+			}
+
+			// Merged check
+			merged, err := BranchMergedIntoBase(ctx, runner, item.Path, item.BranchLabel, baseBranch)
+			if err != nil {
+				ch <- result{idx, err}
+				return
+			}
+			item.IsMerged = merged
+
+			// Ahead/behind
+			ahead, behind, err := AheadBehind(ctx, runner, item.Path, item.BranchLabel, baseBranch)
+			if err != nil {
+				ch <- result{idx, err}
+				return
+			}
+			item.Ahead = ahead
+			item.Behind = behind
+
+			ch <- result{idx, nil}
+		}(i)
+	}
+
+	for range items {
+		r := <-ch
+		if r.err != nil {
+			return r.err
+		}
+	}
+	return nil
+}
