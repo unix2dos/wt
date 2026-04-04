@@ -90,8 +90,8 @@ func fileChangesWidth(items []worktree.Worktree) int {
 	return max
 }
 
-// formatSummary builds the summary line shown below the menu.
-func formatSummary(items []worktree.Worktree) string {
+// FormatSummary builds the summary line shown below the menu.
+func FormatSummary(items []worktree.Worktree) string {
 	n := len(items)
 	var noun string
 	if n == 1 {
@@ -180,7 +180,7 @@ func RenderMenu(w io.Writer, items []worktree.Worktree) {
 	}
 
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "  "+formatSummary(items))
+	fmt.Fprintln(w, "  "+FormatSummary(items))
 	fmt.Fprintf(w, "Select [1-%d]> ", len(items))
 }
 

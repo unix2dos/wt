@@ -9,23 +9,32 @@ import (
 	"ww/internal/worktree"
 )
 
-func TestFormatFzfCandidatesIncludesIndexStatusBranchAndPath(t *testing.T) {
+func TestFormatFzfCandidatesIncludesAllColumns(t *testing.T) {
 	got := string(formatFzfCandidates([]worktree.Worktree{
 		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true, IsDirty: true},
 		{Index: 2, BranchLabel: "feat-a", Path: "/repo/.worktrees/feat-a", IsDirty: true},
 	}))
 
-	// IsDirty without IsMerged shows no DIRTY tag; IsCurrent shows [CURRENT]
-	if !strings.Contains(got, "1\t[CURRENT]         \tmain  \t/repo") {
-		t.Fatalf("expected current candidate, got %q", got)
+	stripped := StripAnsi(got)
+	// Current row has ★ marker and [CURRENT] tag
+	if !strings.Contains(stripped, "★") {
+		t.Fatalf("expected ★ marker for current worktree, got %q", stripped)
 	}
-	// dirty-only without merged: empty status field (padded to humanStatusWidth=18)
-	if !strings.Contains(got, "2\t                  \tfeat-a\t/repo/.worktrees/feat-a") {
-		t.Fatalf("expected non-current candidate, got %q", got)
+	if !strings.Contains(stripped, "[CURRENT]") {
+		t.Fatalf("expected [CURRENT] tag, got %q", stripped)
+	}
+	// Non-current row has space marker
+	lines := strings.Split(strings.TrimSpace(stripped), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected two candidates, got %q", stripped)
+	}
+	secondFields := strings.SplitN(lines[1], "\t", 2)
+	if len(secondFields) < 2 || !strings.HasPrefix(secondFields[1], " ") {
+		t.Fatalf("expected space marker for non-current worktree, got %q", lines[1])
 	}
 }
 
-func TestFormatFzfCandidatesPadsStatusAndBranchFields(t *testing.T) {
+func TestFormatFzfCandidatesPadsFields(t *testing.T) {
 	got := string(formatFzfCandidates([]worktree.Worktree{
 		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true},
 		{Index: 2, BranchLabel: "codex/current-dirty-status", Path: "/repo/.worktrees/current-dirty-status", IsDirty: true},
@@ -38,25 +47,20 @@ func TestFormatFzfCandidatesPadsStatusAndBranchFields(t *testing.T) {
 
 	first := strings.Split(lines[0], "\t")
 	second := strings.Split(lines[1], "\t")
-	if len(first) != 4 || len(second) != 4 {
-		t.Fatalf("expected four tab-separated fields, got %q", got)
+	if len(first) != 6 || len(second) != 6 {
+		t.Fatalf("expected six tab-separated fields, got first=%d second=%d: %q", len(first), len(second), got)
 	}
 
-	if len(first[1]) != len(second[1]) {
-		t.Fatalf("expected padded status fields, got %q and %q", first[1], second[1])
-	}
-	if len(first[2]) != len(second[2]) {
-		t.Fatalf("expected padded branch fields, got %q and %q", first[2], second[2])
-	}
-	if strings.TrimSpace(first[2]) != "main" || strings.TrimSpace(second[2]) != "codex/current-dirty-status" {
-		t.Fatalf("expected branch names to survive padding, got %q", got)
+	stripped := StripAnsi(got)
+	if !strings.Contains(stripped, "main") || !strings.Contains(stripped, "codex/current-dirty-status") {
+		t.Fatalf("expected branch names to survive padding, got %q", stripped)
 	}
 }
 
 func TestSelectWorktreeWithFzfReturnsSelectedWorktree(t *testing.T) {
 	runner := &fakeFzfRunner{
 		lookPath: "/usr/bin/fzf",
-		stdout:   []byte("2\t                  \tfeat-a\t/repo/.worktrees/feat-a\n"),
+		stdout:   []byte("2\t  \tfeat-a\t\t\t/repo/.worktrees/feat-a\n"),
 	}
 
 	got, err := SelectWorktreeWithFzf(context.Background(), []worktree.Worktree{
@@ -122,7 +126,22 @@ func TestSelectWorktreeWithFzfReturnsErrSelectionCanceled(t *testing.T) {
 	}
 }
 
-func TestFormatFzfCandidatesShowsMergedTag(t *testing.T) {
+func TestFormatFzfCandidatesShowsFileChanges(t *testing.T) {
+	got := string(formatFzfCandidates([]worktree.Worktree{
+		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true, Staged: 2, Unstaged: 1},
+		{Index: 2, BranchLabel: "feat-a", Path: "/wt/feat-a", Untracked: 3},
+	}))
+
+	stripped := StripAnsi(got)
+	if !strings.Contains(stripped, "+2 ~1") {
+		t.Fatalf("expected staged/unstaged counts in fzf output, got %q", stripped)
+	}
+	if !strings.Contains(stripped, "?3") {
+		t.Fatalf("expected untracked count in fzf output, got %q", stripped)
+	}
+}
+
+func TestFormatFzfCandidatesShowsMergedTagAndDimsBranchPath(t *testing.T) {
 	got := string(formatFzfCandidates([]worktree.Worktree{
 		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true},
 		{Index: 2, BranchLabel: "fix/typo", Path: "/wt/fix-typo", IsMerged: true},
@@ -133,6 +152,28 @@ func TestFormatFzfCandidatesShowsMergedTag(t *testing.T) {
 	}
 	if !strings.Contains(got, "[CURRENT]") {
 		t.Fatalf("expected [CURRENT] in fzf output, got %q", got)
+	}
+	// Merged row branch and path should be dimmed (ANSI dim = \x1b[2m)
+	if !strings.Contains(got, "\x1b[2mfix/typo\x1b[0m") {
+		t.Fatalf("expected dimmed branch for merged worktree, got %q", got)
+	}
+	if !strings.Contains(got, "\x1b[2m/wt/fix-typo\x1b[0m") {
+		t.Fatalf("expected dimmed path for merged worktree, got %q", got)
+	}
+}
+
+func TestFormatFzfCandidatesShowsAheadBehind(t *testing.T) {
+	got := string(formatFzfCandidates([]worktree.Worktree{
+		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true},
+		{Index: 2, BranchLabel: "feat-a", Path: "/wt/feat-a", Ahead: 3, Behind: 1},
+	}))
+
+	stripped := StripAnsi(got)
+	if !strings.Contains(stripped, "↑3") {
+		t.Fatalf("expected ahead count in fzf output, got %q", stripped)
+	}
+	if !strings.Contains(stripped, "↓1") {
+		t.Fatalf("expected behind count in fzf output, got %q", stripped)
 	}
 }
 

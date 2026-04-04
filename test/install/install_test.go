@@ -20,11 +20,11 @@ func TestInstallIsIdempotentAndBuildsBinary(t *testing.T) {
 	firstInstall := runInstall(t, home)
 	runInstall(t, home)
 
-	if !strings.Contains(firstInstall, "Use `ww` to switch") {
+	if !strings.Contains(firstInstall, "ww (switch)") {
 		t.Fatalf("expected install output to mention ww, got %q", firstInstall)
 	}
-	if !strings.Contains(firstInstall, "fzf when available") {
-		t.Fatalf("expected install output to mention auto selector routing, got %q", firstInstall)
+	if !strings.Contains(firstInstall, "ww list") {
+		t.Fatalf("expected install output to mention ww list, got %q", firstInstall)
 	}
 
 	data, err := os.ReadFile(rcPath)

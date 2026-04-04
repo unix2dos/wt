@@ -375,6 +375,12 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 		})
 	}
 	fmt.Fprintln(out, ui.FormatListTable(tableEntries))
+
+	worktrees := make([]worktree.Worktree, 0, len(entries))
+	for _, entry := range entries {
+		worktrees = append(worktrees, entry.item)
+	}
+	fmt.Fprintln(out, ui.FormatSummary(worktrees))
 	return 0
 }
 

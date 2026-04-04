@@ -191,14 +191,9 @@ $(collect_rc_files)
 EOF
 append_shell_wrapper "$RC_TARGET" "$BIN_DIR/ww-helper" "$BIN_DIR/ww.sh"
 
-printf 'Installed helper binary to %s\n' "$BIN_DIR/ww-helper"
-printf 'Installed shell library to %s\n' "$BIN_DIR/ww.sh"
-printf 'Installed ww shell function via %s\n' "$RC_TARGET"
-printf 'Updated shell rc: %s\n' "$RC_TARGET"
+printf 'Installed binary:  %s\n' "$BIN_DIR/ww-helper"
+printf 'Installed library: %s\n' "$BIN_DIR/ww.sh"
+printf 'Updated shell rc:  %s\n' "$RC_TARGET"
 printf '\n'
-printf 'Reload your shell first: source %s\n' "$RC_TARGET"
-printf 'Use `ww` to switch the current shell directory.\n'
-printf '`ww` uses fzf when available and falls back to the built-in selector.\n'
-printf 'Use `ww list` to print worktrees without changing directory.\n'
-printf 'Use `ww new <name>` to create and enter a new worktree.\n'
-printf '`ww` changes directory in your current shell.\n'
+printf 'Run: source %s\n' "$RC_TARGET"
+printf 'Then: ww (switch), ww list (overview), ww new <name> (create)\n'

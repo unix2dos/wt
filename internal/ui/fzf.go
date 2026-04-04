@@ -46,13 +46,14 @@ func SelectWorktreeWithFzf(ctx context.Context, items []worktree.Worktree, runne
 
 	input := formatFzfCandidates(items)
 	stdout, _, err := runner.Run(ctx, "fzf", input,
+		"--ansi",
 		"--no-sort",
 		"--tac",
 		"--delimiter=\t",
 		"--nth=2..",
 		"--pointer=*",
 		fmt.Sprintf("--bind=load:pos(%d)", initialFzfPosition(items)),
-		"--prompt=Select a worktree> ",
+		fmt.Sprintf("--prompt=Select [1-%d]> ", len(items)),
 	)
 	if err != nil {
 		if isCanceled(err) {
@@ -83,14 +84,40 @@ func SelectWorktreeWithFzf(ctx context.Context, items []worktree.Worktree, runne
 func formatFzfCandidates(items []worktree.Worktree) []byte {
 	var buf strings.Builder
 	branchWidth := HumanBranchWidth(items)
+	abWidth := aheadBehindWidth(items)
+	fcWidth := fileChangesWidth(items)
 	for _, item := range items {
-		fmt.Fprintf(&buf, "%d\t%-*s\t%-*s\t%s\n", item.Index, humanStatusWidth, fzfStatus(item), branchWidth, item.BranchLabel, item.Path)
+		marker := " "
+		if item.IsCurrent {
+			marker = "★"
+		}
+
+		statusStr := colorizeStatus(item)
+
+		branchStr := item.BranchLabel
+		if item.IsMerged && !item.IsCurrent {
+			branchStr = Dim(branchStr)
+		}
+
+		abStr := FormatAheadBehind(item.Ahead, item.Behind)
+		fcStr := FormatFileChanges(item.Staged, item.Unstaged, item.Untracked)
+
+		pathStr := item.Path
+		if item.IsMerged && !item.IsCurrent {
+			pathStr = Dim(pathStr)
+		}
+
+		fmt.Fprintf(&buf, "%d\t%s %s\t%s\t%s\t%s\t%s\n",
+			item.Index,
+			marker,
+			PadRight(statusStr, humanStatusWidth),
+			PadRight(branchStr, branchWidth),
+			PadRight(abStr, abWidth),
+			PadRight(fcStr, fcWidth),
+			pathStr,
+		)
 	}
 	return []byte(buf.String())
-}
-
-func fzfStatus(item worktree.Worktree) string {
-	return StatusLabel(item)
 }
 
 func initialFzfPosition(items []worktree.Worktree) int {
