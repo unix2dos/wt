@@ -138,7 +138,7 @@ func formatSummary(items []worktree.Worktree) string {
 	} else {
 		safeNoun = "safe to remove"
 	}
-	hint := fmt.Sprintf("ww rm %s", strings.Join(safeIndices, " "))
+	hint := fmt.Sprintf("ww rm %s", safeIndices[0])
 	return fmt.Sprintf("%s · %d %s (%s)", base, k, safeNoun, hint)
 }
 

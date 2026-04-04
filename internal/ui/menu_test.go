@@ -92,6 +92,29 @@ func TestRenderMenuSingularWorktree(t *testing.T) {
 	}
 }
 
+func TestRenderMenuSummaryShowsOnlyFirstSafeIndex(t *testing.T) {
+	var buf bytes.Buffer
+
+	items := []worktree.Worktree{
+		{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true},
+		{Index: 2, BranchLabel: "fix/typo", Path: "/wt/fix-typo", IsMerged: true},
+		{Index: 3, BranchLabel: "fix/other", Path: "/wt/fix-other", IsMerged: true},
+	}
+
+	RenderMenu(&buf, items)
+	got := buf.String()
+
+	if !strings.Contains(got, "2 safe to remove") {
+		t.Fatalf("expected '2 safe to remove' in summary, got %q", got)
+	}
+	if !strings.Contains(got, "ww rm 2)") {
+		t.Fatalf("expected hint with only first index 'ww rm 2)', got %q", got)
+	}
+	if strings.Contains(got, "ww rm 2 3") {
+		t.Fatalf("should not show all indices, got %q", got)
+	}
+}
+
 func TestRenderMenuMergedWithDirtyNotSafeToRemove(t *testing.T) {
 	var buf bytes.Buffer
 
