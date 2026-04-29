@@ -301,10 +301,9 @@ The protocol version is intentionally **not** duplicated inside `data` — it al
 
 | Flag | Meaning |
 |------|---------|
-| `--non-interactive` | Required for scripting. Disables prompts; fails fast on conflicts |
 | `--force` | Remove despite uncommitted changes (data loss risk — caller's responsibility) |
 
-**Positional:** `<name|path|index>` — same resolution rules as `switch-path`.
+**Positional:** `<name|path|index>` — same resolution rules as `switch-path`. When omitted in `--json` mode, `rm` returns `worktree.not_found` rather than prompting (the JSON path never blocks on a TTY).
 
 **Data shape:**
 

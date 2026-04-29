@@ -1,29 +1,28 @@
 # w+w
 
-Fast worktree switching for safer parallel work.
+**The worktree primitive your AI agents and you share.**
 
-`ww` is a shell-first Git worktree workflow for the current repository. It keeps the fast switch/create/remove loop, then adds an interactive cleanup path so parallel work stays manageable.
+`ww` is a Git worktree workflow with two interfaces over one set of worktrees: `ww` for humans (fzf-driven, changes your shell directory) and [`ww-helper --json`](docs/protocol.md) for AI agents and orchestrators — backed by a versioned wire protocol you can depend on.
 
 ## Demo
 
 [![ww demo](docs/assets/ww-demo.svg)](https://unix2dos.github.io/ww/)
 
-The demo is now a workflow overview in about a minute, with a short `ww-helper --json` tail:
+A one-minute workflow overview ending with a short `ww-helper --json` tail:
 
 - switch into an existing worktree with the `fzf` fast path
 - inspect the current workspace set with `ww list`
 - create a fresh branch workspace with `ww new feat-demo`
-- remove the temporary workspace with safe `ww rm`
-- review stale workspaces with `ww rm --cleanup`
+- remove a workspace with safe `ww rm`
 - end with a quick machine-readable `ww-helper --json` pass
 
 ## Why ww
 
-- `ww` changes the current shell directory, so switching worktrees feels like changing folders, not launching a side tool.
-- `ww new <name>` creates a fresh branch workspace, copies git-ignored config files (`.env`, local configs, etc.) from the main worktree, and moves your shell into it immediately.
-- `ww list` shows all worktrees at a glance with ahead/behind counts and file changes; `ww list --verbose` adds labels, intent, and metadata.
-- `ww rm` explains what will be removed, what will be kept, and what looks risky before you confirm.
-- `ww rm --cleanup` lets you review old worktrees and delete the ones you no longer need.
+**One mental model for you and your agent.** Both `ww` and `ww-helper` operate on the same worktrees, with the same metadata (labels, TTL, last-used). When a Claude / Codex / Cursor agent creates a worktree, your `ww list` sees it immediately. When you create one, the agent sees it too.
+
+**Shell-first for humans, contract-first for agents.** `ww` changes your current shell directory — switching worktrees feels like `cd`-ing, not launching a side tool. `ww-helper --json` emits a versioned, [stable JSON envelope](docs/protocol.md) so an MCP server, orchestrator, or shell script can depend on the wire format without guessing.
+
+**Safe by default.** `ww rm` shows what will be removed, what will be kept, and what looks risky before you confirm. `ww new` copies your git-ignored config files (`.env`, local configs) into the new worktree so it's runnable on first `cd`.
 
 ## Quick Start
 
@@ -45,47 +44,44 @@ curl -fsSL https://github.com/unix2dos/ww/releases/latest/download/install-relea
 source ~/.zshrc
 ```
 
-Then try the boundary-safe loop inside any Git repository:
+Then try the loop inside any Git repository:
 
 ```bash
-ww
-ww new feat-demo
-ww list
-ww rm feat-demo
-ww rm --cleanup
+ww                # interactive switch
+ww new feat-demo  # create + cd into a new worktree
+ww list           # see all worktrees with status
+ww rm feat-demo   # remove with safety preview
 ```
 
-## Selector Behavior
+For the fastest interactive switch, install `fzf`. If `fzf` is not on PATH, `ww` falls back to a built-in selector — the workflow still works without extra setup.
 
-For the fastest path, install `fzf`. If `fzf` is not available, `ww` automatically falls back to the built-in selector, so the workflow still works without extra setup.
+## For AI agents and orchestrators
 
-## For AI Agents
-
-Use `ww-helper` for programmatic calls. `ww` stays shell-first for humans and still changes your current shell directory for `switch` and `new`.
-
-Current machine-readable commands:
+`ww-helper` is the machine-readable interface. Every `--json` command emits a single-line envelope conforming to a [versioned wire protocol](docs/protocol.md):
 
 ```bash
+ww-helper version --json
 ww-helper list --json
 ww-helper new-path --json --label agent:codex --ttl 24h -m "Fix login redirect" feat-demo
 ww-helper gc --ttl-expired --dry-run --json
-ww-helper rm --json --non-interactive feat-demo
+ww-helper rm --json feat-demo
 ```
 
-The shared contract for coding agents is the machine-readable `ww-helper` interface plus repository instructions in `AGENTS.md`.
+Envelope shape:
 
-Human-facing safety flow:
-
-```bash
-ww new feat-a
-ww rm --cleanup
+```json
+{"protocol":"1.0","ok":true,"command":"list","data":[...],"warnings":[]}
+{"protocol":"1.0","ok":false,"command":"list","error":{"code":"git.repo_missing","message":"...","context":{}}}
 ```
 
-`ww-helper rm --json` uses the same JSON envelope shape as the other machine-readable commands. For humans, bulk cleanup lives under `ww rm --cleanup`. For automation, `ww-helper gc` still requires at least one explicit selector such as `--ttl-expired`, `--idle 7d`, or `--merged`.
+The `protocol` field, the field names inside `data`, and the `domain.subcode` error codes (`worktree.dirty`, `git.repo_missing`, `selector.fzf_not_installed`, …) are stable within v1.x — additive changes only. See [`docs/protocol.md`](docs/protocol.md) for the complete contract, including per-command schemas, exit codes, and what is explicitly **not** covered (`switch-path` is raw stdout for shell-eval; `list --filter` grammar is not yet frozen).
+
+Repository-level instructions for coding agents live in [`AGENTS.md`](AGENTS.md).
 
 ## Reference
 
 `README.md` stays in landing-page mode. Detailed install, usage, release, and command reference live in:
 
+- [Wire Protocol](docs/protocol.md) — for anyone scripting `ww-helper`
 - [Reference Guide](docs/reference.md)
 - [Demo Script Notes](docs/demo-script.md)
