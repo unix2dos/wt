@@ -277,7 +277,7 @@ If you need structured output for resolution, use `list --json` and resolve clie
   "ok": true,
   "command": "version",
   "data": {
-    "binary": "v0.4.0"
+    "binary": "v0.11.0"
   },
   "warnings": []
 }
@@ -287,7 +287,7 @@ If you need structured output for resolution, use `list --json` and resolve clie
 
 | Field | Type | Meaning | Stability |
 |-------|------|---------|-----------|
-| `binary` | string | Build version of the binary. `"dev"` for unreleased builds; otherwise the release tag (e.g. `"v0.4.0"`). Injected at build time via ldflags | stable |
+| `binary` | string | Build version of the binary. `"dev"` for unreleased builds; otherwise the release tag (e.g. `"v0.11.0"`). Injected at build time via ldflags | stable |
 
 The protocol version is intentionally **not** duplicated inside `data` — it already lives at the envelope's top-level `protocol` field. Pulling it from `data` would invite skew between the two.
 
