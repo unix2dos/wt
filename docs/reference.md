@@ -107,66 +107,83 @@ If you installed into Bash, reload `~/.bashrc` instead.
 - `ww` or `ww switch` selects a worktree and switches into it.
 - `ww list` prints worktrees without changing directory. `ww list --verbose` adds labels, intent, and metadata.
 - `ww new <name>` creates a new worktree under `./.worktrees/<name>` and switches into it.
-- `ww rm [<name>]` removes a worktree and deletes its branch only when that branch is already merged into the effective base branch.
-- `ww rm --cleanup` opens an interactive cleanup review for old worktrees.
+- `ww rm [<name>]` removes a worktree and deletes its branch only when that branch is already merged into the effective base branch. Without a target, `ww rm` opens an interactive selector for review-and-remove.
+- `ww version` (or `ww --version`) prints the binary and protocol version.
 - `ww help` or `ww --help` prints the command summary.
 - `ww` uses `fzf` automatically when available and falls back to the built-in arrow-key selector otherwise.
 
 ### For AI Agents
 
-Use `ww-helper` for machine-readable workflows. `ww` remains the human shell entrypoint and still treats `switch` / `new` as directory-changing commands.
+Two integration paths — pick whichever fits the agent. Both are backed by the same v1.0 wire protocol; see [`protocol.md`](protocol.md) for the formal contract.
 
-Current programmatic commands:
+**Over MCP** (Claude Code, Cursor, Zed, Continue, Cline, Codex, …):
+
+```json
+{"mcpServers": {"ww": {"command": "ww-helper", "args": ["mcp", "serve"]}}}
+```
+
+Six tools become available: `ww_list`, `ww_new`, `ww_remove`, `ww_gc`, `ww_switch_path`, `ww_version`.
+
+**As a subprocess**:
 
 ```bash
+ww-helper version --json
 ww-helper list --json
 ww-helper new-path --json --label agent:claude-code --ttl 24h -m "Fix login redirect" feat-a
 ww-helper gc --ttl-expired --idle 7d --dry-run --json
-ww-helper rm --json --non-interactive feat-a
+ww-helper rm --json feat-a
 ```
 
 The shared integration contract is `AGENTS.md` plus the machine-readable `ww-helper` commands. When `ww-helper` covers a workflow, agents should use it instead of scripting raw `git worktree` commands.
 
-`ww-helper switch-path` remains a path-printing helper; agents should keep using `switch-path` and the JSON subcommands above for machine-readable flows.
+`ww-helper switch-path` is a path-printing helper for shell-eval (`cd "$(ww-helper switch-path X)"`) and is intentionally **out of the JSON envelope contract**; over MCP, the equivalent `ww_switch_path` tool wraps the path normally.
 
 #### JSON Envelope
 
-Successful `--json` responses use:
+Successful `--json` responses:
 
 ```json
 {
+  "protocol": "1.0",
   "ok": true,
   "command": "list",
-  "data": { ... }
+  "data": { ... },
+  "warnings": []
 }
 ```
 
-Error responses use:
+Error responses:
 
 ```json
 {
+  "protocol": "1.0",
   "ok": false,
   "command": "rm",
   "error": {
-    "code": "WORKTREE_DIRTY",
+    "code": "worktree.dirty",
     "message": "worktree has uncommitted changes; rerun with --force",
-    "exit_code": 1
+    "context": {}
   }
 }
 ```
 
+The envelope no longer carries `exit_code` — the process exit code is the single source of truth. Error codes follow `domain.subcode` (`worktree.dirty`, `git.repo_missing`, `selector.fzf_not_installed`, `input.missing_selector`, …); see `protocol.md` §5 for the full table.
+
 #### `ww-helper list --json`
 
-Returns an array of worktrees with:
+Returns an array of worktrees. Each entry has:
 
-- `path`
-- `branch`
-- `dirty`
-- `active`
-- `created_at`
-- `last_used_at`
-- `label`
-- `ttl`
+- `path` — absolute filesystem path
+- `branch` — branch label
+- `dirty` — boolean; any uncommitted changes
+- `active` — boolean; this is the caller's current worktree
+- `created_at` — unix milliseconds; `0` if unknown
+- `last_used_at` — unix milliseconds; `0` if never
+- `label` — free-form metadata string; `""` if none
+- `ttl` — duration string (`"24h"`, `"7d"`); `""` if none
+- `merged` — branch is merged into the base branch
+- `ahead` / `behind` — commits ahead/behind the base branch
+- `staged` / `unstaged` / `untracked` — change counts
 
 #### `ww-helper new-path --json --label agent:claude-code --ttl 24h -m "Fix login redirect" feat-a`
 
@@ -187,7 +204,7 @@ When `label` is present, `ww-helper` also stores extra workspace context for lat
 - `--idle <duration>`
 - `--merged`
 
-`gc requires at least one explicit selector`; a bare `ww-helper gc --json` returns `GC_RULE_REQUIRED` with exit code `2`.
+A bare `ww-helper gc --json` (no selector) returns `input.missing_selector` with exit code `2`.
 
 Dry-run responses use the same envelope and return:
 
@@ -198,17 +215,15 @@ Dry-run responses use the same envelope and return:
 - `items[].action`
 - `items[].reason` when skipped
 
-#### `ww-helper rm --json --non-interactive <target>`
+#### `ww-helper rm --json <target>`
 
-Removes the target without prompting, while still enforcing the normal safety rules:
+The JSON path never prompts. Safety rules:
 
-- dirty worktrees still require `--force`
-- the active worktree cannot be removed
-- if you omit `<target>` and more than one removable worktree exists, the command returns `AMBIGUOUS_MATCH`
+- dirty worktrees require `--force`
+- the active worktree cannot be removed (returns `worktree.remove_current`)
+- if you omit `<target>` and more than one removable worktree exists, the command returns `worktree.ambiguous_match`
 
-#### Breaking Change
-
-`ww-helper rm --json` used to return a flat JSON object. It now returns the same JSON envelope format as the other Phase 1 machine-readable commands.
+`new-path --json` automatically syncs git-ignored files (`.env` and similar) from the main worktree by default; results are surfaced through the envelope's `warnings` array (`sync.copied`, `sync.skipped`, …). Pass `--no-sync` to opt out, or `--sync-dry-run` to preview without writing files.
 
 ### Interactive Pick
 
@@ -340,13 +355,9 @@ The config file is optional. A missing file uses all built-in defaults. `XDG_CON
 ww rm
 ww rm feat-a
 ww rm --force feat-a
-ww rm --base release/1.0 feat-a
-ww rm --cleanup
 ```
 
-`ww rm` groups removable worktrees by deletion risk, prints a plain-language summary card after selection, removes the worktree, and only deletes the branch when it is already merged into the effective base branch. Dirty worktrees stop before confirmation unless you explicitly rerun with `--force`.
-
-`ww rm --cleanup` opens a repeated review flow for non-current worktrees so you can clean up multiple stale workspaces without learning helper-only cleanup rules.
+`ww rm` (no target) opens an interactive selector for review-and-remove. With a target, it removes that worktree directly after confirmation. The branch is deleted only when it is already merged into the effective base branch. Dirty worktrees stop before confirmation unless you explicitly rerun with `--force`.
 
 When saved workspace context exists, the summary card also includes that context and weak-boundary warnings such as detached state or missing context.
 
@@ -359,7 +370,7 @@ ww switch feat-a
 ww list
 ww new feat-b
 ww rm feat-a
-ww rm --cleanup
+ww rm           # interactive picker for review-and-remove
 ```
 
 `ww`, `ww 2`, and `ww switch feat-a` all switch the current shell into the target worktree.
@@ -371,19 +382,20 @@ ww rm --cleanup
 - `3`: environment problem such as not being in a Git repo
 - `130`: interactive selection canceled
 
-For `ww-helper ... --json`, the envelope `error.exit_code` matches the process exit code.
+`ww-helper ... --json` envelopes do not carry `exit_code`; rely on the process exit code.
 
 ## Smoke Test Matrix
 
 ```bash
 ww --help
 ww help
+ww --version
 ww 1
 ww switch feat-a
 ww list
 ww new feat-b
 ww rm feat-a
-ww rm --cleanup
+ww rm
 ```
 
 Installer checks:

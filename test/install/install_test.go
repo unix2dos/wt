@@ -480,8 +480,8 @@ func TestWwGCPrintsCleanupGuidance(t *testing.T) {
 	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
 		t.Fatalf("expected shell guidance before ww-helper, marker err=%v", statErr)
 	}
-	if !strings.Contains(out, "ww rm --cleanup") {
-		t.Fatalf("expected cleanup guidance, got %q", out)
+	if !strings.Contains(out, "ww rm") || !strings.Contains(out, "ww-helper gc") {
+		t.Fatalf("expected cleanup guidance pointing at ww rm or ww-helper gc, got %q", out)
 	}
 }
 

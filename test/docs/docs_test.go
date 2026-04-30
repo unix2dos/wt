@@ -76,11 +76,10 @@ func TestPagesDemoContract(t *testing.T) {
 		"## Release",
 		"`ww help` or `ww --help` prints the command summary.",
 		"### For AI Agents",
-		"ww rm --cleanup",
-		"ww-helper rm --json --non-interactive feat-a",
+		"ww-helper rm --json feat-a",
 		"ww-helper new-path --json --label agent:claude-code --ttl 24h -m",
 		"ww-helper gc --ttl-expired --idle 7d --dry-run --json",
-		"#### Breaking Change",
+		"protocol.md",
 		"[CURRENT]",
 		"[DIRTY]",
 		"┌───────┬",
@@ -96,6 +95,13 @@ func TestPagesDemoContract(t *testing.T) {
 		"ww gc --idle 7d",
 		"ww gc --merged",
 		"ACTIVE*",
+		"ww rm --cleanup",
+		"--non-interactive",
+		"WORKTREE_DIRTY",
+		"AMBIGUOUS_MATCH",
+		"GC_RULE_REQUIRED",
+		"error.exit_code",
+		"--base release",
 	} {
 		if strings.Contains(reference, forbidden) {
 			t.Fatalf("expected reference doc to stop teaching human-facing %q", forbidden)
