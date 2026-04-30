@@ -1,20 +1,20 @@
 class Ww < Formula
   desc "Worktree primitive your AI agents and you share"
   homepage "https://github.com/unix2dos/ww"
-  version "0.11.1"
+  version "0.11.2"
 
   if OS.mac? && Hardware::CPU.arm?
-    url "https://github.com/unix2dos/ww/releases/download/v0.11.1/ww-v0.11.1-darwin-arm64.tar.gz"
-    sha256 "e04a5f8e8a325d2b65142501957f31a4f0f9fcb9b7c862dca00ae6bce513e9cb"
+    url "https://github.com/unix2dos/ww/releases/download/v0.11.2/ww-v0.11.2-darwin-arm64.tar.gz"
+    sha256 "fb5a5bef11f3954518af98cb955a345b573f66535843bb244b86aa27f74de072"
   elsif OS.mac? && Hardware::CPU.intel?
-    url "https://github.com/unix2dos/ww/releases/download/v0.11.1/ww-v0.11.1-darwin-amd64.tar.gz"
-    sha256 "f6a91870b4721538b51fd18c1c7f21b57f3fff584d8857aa97d8c2b092034d02"
+    url "https://github.com/unix2dos/ww/releases/download/v0.11.2/ww-v0.11.2-darwin-amd64.tar.gz"
+    sha256 "d1644e013deda08a782a6482bec64082df2a8d72577bbe7947c4dfcb94936040"
   elsif OS.linux? && Hardware::CPU.arm?
-    url "https://github.com/unix2dos/ww/releases/download/v0.11.1/ww-v0.11.1-linux-arm64.tar.gz"
-    sha256 "23c06290126f8e56e61f4c0b73efebc0a3ee995c2e3c5a36e3c85f704c628059"
+    url "https://github.com/unix2dos/ww/releases/download/v0.11.2/ww-v0.11.2-linux-arm64.tar.gz"
+    sha256 "fbc88623c56b3789df874ce0d07bf02be6f0cb89f763ff730141af5aaef5c28e"
   elsif OS.linux? && Hardware::CPU.intel?
-    url "https://github.com/unix2dos/ww/releases/download/v0.11.1/ww-v0.11.1-linux-amd64.tar.gz"
-    sha256 "2cffb5d9e5b0063c6514ba81d82390217d773a1fe243eb8ef1e02b5ae87e7517"
+    url "https://github.com/unix2dos/ww/releases/download/v0.11.2/ww-v0.11.2-linux-amd64.tar.gz"
+    sha256 "97ce85eaf792302bcb7714c450aa2ac09ddc51761b2317d0675baac460d18127"
   end
 
   def install
