@@ -286,13 +286,6 @@ Example:
 Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, and the status column uses the same `[CURRENT]` / `[CURRENT] [DIRTY]` / `[DIRTY]` tags as the interactive selector.
 Long `PATH` values are wrapped inside the `PATH` cell instead of being truncated.
 
-Available helper-driven filters:
-
-- `--filter dirty`
-- `--filter label=agent:claude-code`
-- `--filter label~agent`
-- `--filter stale=7d`
-
 `--verbose` appends extra metadata such as stored workspace context and timestamps to the human-readable output.
 
 ### New

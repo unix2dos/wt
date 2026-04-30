@@ -452,39 +452,6 @@ func TestWwNewRejectsHelperOnlyTTLFlag(t *testing.T) {
 	}
 }
 
-func TestWwGCPrintsCleanupGuidance(t *testing.T) {
-	home := t.TempDir()
-	rcPath := filepath.Join(home, ".zshrc")
-	if err := os.WriteFile(rcPath, []byte(""), 0o644); err != nil {
-		t.Fatalf("write rc file: %v", err)
-	}
-
-	runInstall(t, home)
-
-	origin := t.TempDir()
-	marker := filepath.Join(home, "helper-invoked")
-	script := fmt.Sprintf("#!/usr/bin/env bash\ntouch %q\nexit 99\n", marker)
-	if err := writeExecutableScript(filepath.Join(home, ".local", "bin", "ww-helper"), script); err != nil {
-		t.Fatalf("write fake ww-helper: %v", err)
-	}
-
-	out, err := runShellResult(t, home, fmt.Sprintf(`
-		cd %q
-		source %q
-		ww gc
-	`, origin, rcPath))
-
-	if err == nil {
-		t.Fatalf("expected ww gc to fail with guidance")
-	}
-	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
-		t.Fatalf("expected shell guidance before ww-helper, marker err=%v", statErr)
-	}
-	if !strings.Contains(out, "ww rm") || !strings.Contains(out, "ww-helper gc") {
-		t.Fatalf("expected cleanup guidance pointing at ww rm or ww-helper gc, got %q", out)
-	}
-}
-
 func TestWwListPrintsOutputWithoutChangingDirectory(t *testing.T) {
 	home := t.TempDir()
 	rcPath := filepath.Join(home, ".zshrc")

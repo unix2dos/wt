@@ -373,18 +373,11 @@ func runSwitchPath(ctx context.Context, args []string, in io.Reader, out io.Writ
 type listConfig struct {
 	json    bool
 	verbose bool
-	filters []listFilter
 }
 
 type listEntry struct {
 	item worktree.Worktree
 	meta state.WorktreeMetadata
-}
-
-type listFilter struct {
-	kind     string
-	value    string
-	duration state.DurationSpec
 }
 
 func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer, deps Deps) int {
@@ -394,7 +387,7 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 	}
 
 	if cfg.json {
-		views, _, err := ListData(ctx, deps, ListOptions{Filters: cfg.filters})
+		views, _, err := ListData(ctx, deps, ListOptions{})
 		if err != nil {
 			return writeCommandError("list", out, errOut, cfg.json, err)
 		}
@@ -416,10 +409,7 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 
 	annotateExtendedStatusBestEffort(ctx, deps, items)
 
-	entries, err := filterListEntries(decorateListEntries(items, metadata), cfg.filters, time.Now())
-	if err != nil {
-		return writeCommandError("list", out, errOut, cfg.json, err)
-	}
+	entries := decorateListEntries(items, metadata)
 	if len(entries) == 0 {
 		return writeCommandError("list", out, errOut, cfg.json, appError{
 			Code:     "worktree.not_found",
@@ -878,22 +868,6 @@ func parseListArgs(args []string) (listConfig, error) {
 			cfg.json = true
 		case arg == "--verbose":
 			cfg.verbose = true
-		case arg == "--filter":
-			if i+1 >= len(args) {
-				return cfg, appError{Code: "input.invalid_argument", Message: "missing value for --filter", ExitCode: 2}
-			}
-			i++
-			filter, err := parseListFilter(args[i])
-			if err != nil {
-				return cfg, err
-			}
-			cfg.filters = append(cfg.filters, filter)
-		case strings.HasPrefix(arg, "--filter="):
-			filter, err := parseListFilter(strings.TrimPrefix(arg, "--filter="))
-			if err != nil {
-				return cfg, err
-			}
-			cfg.filters = append(cfg.filters, filter)
 		case strings.HasPrefix(arg, "-"):
 			return cfg, appError{Code: "input.invalid_argument", Message: fmt.Sprintf("unknown option: %s", arg), ExitCode: 2}
 		default:
@@ -1019,33 +993,6 @@ func parseGCArgs(args []string) (gcConfig, error) {
 	return cfg, nil
 }
 
-func parseListFilter(expr string) (listFilter, error) {
-	switch {
-	case expr == "dirty":
-		return listFilter{kind: "dirty"}, nil
-	case strings.HasPrefix(expr, "label="):
-		value := strings.TrimPrefix(expr, "label=")
-		if strings.TrimSpace(value) == "" {
-			return listFilter{}, appError{Code: "input.invalid_filter", Message: fmt.Sprintf("invalid filter: %s", expr), ExitCode: 2}
-		}
-		return listFilter{kind: "label_eq", value: value}, nil
-	case strings.HasPrefix(expr, "label~"):
-		value := strings.TrimPrefix(expr, "label~")
-		if strings.TrimSpace(value) == "" {
-			return listFilter{}, appError{Code: "input.invalid_filter", Message: fmt.Sprintf("invalid filter: %s", expr), ExitCode: 2}
-		}
-		return listFilter{kind: "label_contains", value: value}, nil
-	case strings.HasPrefix(expr, "stale="):
-		spec, err := state.ParseHumanDuration(strings.TrimPrefix(expr, "stale="))
-		if err != nil {
-			return listFilter{}, appError{Code: "input.invalid_filter", Message: fmt.Sprintf("invalid filter: %s", expr), ExitCode: 2}
-		}
-		return listFilter{kind: "stale", duration: spec}, nil
-	default:
-		return listFilter{}, appError{Code: "input.invalid_filter", Message: fmt.Sprintf("invalid filter: %s", expr), ExitCode: 2}
-	}
-}
-
 func ttlExpired(meta state.WorktreeMetadata, now time.Time) bool {
 	if meta.CreatedAt == 0 || meta.TTL == "" {
 		return false
@@ -1077,50 +1024,6 @@ func decorateListEntries(items []worktree.Worktree, metadata map[string]state.Wo
 		entries = append(entries, listEntry{item: item, meta: meta})
 	}
 	return entries
-}
-
-func filterListEntries(entries []listEntry, filters []listFilter, now time.Time) ([]listEntry, error) {
-	if len(filters) == 0 {
-		return entries, nil
-	}
-
-	filtered := make([]listEntry, 0, len(entries))
-	for _, entry := range entries {
-		if matchesAllListFilters(entry, filters, now) {
-			filtered = append(filtered, entry)
-		}
-	}
-	return filtered, nil
-}
-
-func matchesAllListFilters(entry listEntry, filters []listFilter, now time.Time) bool {
-	for _, filter := range filters {
-		switch filter.kind {
-		case "dirty":
-			if !entry.item.IsDirty {
-				return false
-			}
-		case "label_eq":
-			if entry.meta.Label != filter.value {
-				return false
-			}
-		case "label_contains":
-			if !strings.Contains(entry.meta.Label, filter.value) {
-				return false
-			}
-		case "stale":
-			if entry.meta.LastUsedAt == 0 {
-				return false
-			}
-			lastUsedAt := time.Unix(0, entry.meta.LastUsedAt)
-			if now.Sub(lastUsedAt) < filter.duration.Value {
-				return false
-			}
-		default:
-			return false
-		}
-	}
-	return true
 }
 
 func writeGCHuman(out io.Writer, results []GCItem) {

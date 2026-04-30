@@ -53,8 +53,7 @@ func registerTools(server *mcpsdk.Server, deps app.Deps) {
 // surface verbatim in agent prompts.
 
 type listInput struct {
-	Filter  []string `json:"filter,omitempty" jsonschema:"optional filter expressions, same grammar as ww-helper list --filter (currently unstable; prefer client-side filtering)"`
-	Verbose bool     `json:"verbose,omitempty" jsonschema:"include label and metadata details (no schema impact)"`
+	Verbose bool `json:"verbose,omitempty" jsonschema:"include label and metadata details (no schema impact)"`
 }
 
 type listOutput struct {
@@ -94,13 +93,7 @@ type versionInput struct{}
 
 func listHandler(deps app.Deps) func(context.Context, *mcpsdk.CallToolRequest, listInput) (*mcpsdk.CallToolResult, listOutput, error) {
 	return func(ctx context.Context, _ *mcpsdk.CallToolRequest, in listInput) (*mcpsdk.CallToolResult, listOutput, error) {
-		// Filter expressions are out-of-contract (protocol §6) and the
-		// internal listFilter type is unexported. MVP accepts the field
-		// but silently drops it; clients that need filtering should
-		// fetch the full list and filter client-side, as the protocol
-		// already recommends.
-		_ = in.Filter
-
+		_ = in.Verbose
 		views, _, err := app.ListData(ctx, deps, app.ListOptions{})
 		if err != nil {
 			return errorResult(err), listOutput{}, nil
