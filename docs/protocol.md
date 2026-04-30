@@ -120,7 +120,7 @@ The error envelope's `error.context` follows the same rules: optional, code-keye
 
 **Purpose:** enumerate every worktree in the current repository with status fields needed for orchestration decisions.
 
-**Flags:** `--filter <expr>` (see §6 — currently unstable), `--verbose` (no schema impact in JSON mode).
+**Flags:** `--verbose` (no schema impact in JSON mode).
 
 **Data shape:** array of worktree objects. Empty array if no worktrees match.
 
@@ -374,7 +374,6 @@ Codes use a `domain.subcode` convention so clients can do prefix-matching (`code
 | `input.missing_selector` | `gc` called without any selector flag | 2 |
 | `input.invalid_argument` | Argument parsing failed (extra args, bad index, missing values, unknown flags) | 2 |
 | `input.invalid_duration` | A duration value (`--ttl`, `--idle`) failed to parse | 2 |
-| `input.invalid_filter` | A `list --filter` expression failed to parse | 2 |
 
 > **Implementation status:** as of `feat/protocol-v1.0`, the binary emits the `domain.subcode` codes above and `selector.fzf_not_installed` is split out from generic git failures. The legacy `UPPER_SNAKE` codes are gone and will not return.
 
@@ -392,11 +391,9 @@ The process exit code is authoritative. The error envelope's `error.code` provid
 
 ---
 
-## 6. Filter expression grammar (`list --filter`)
+## 6. Removed: `list --filter`
 
-**Status: out-of-contract for v1.0.** The `--filter` flag works but its grammar is not frozen and may change. Clients that need stability should fetch full `list --json` output and filter client-side.
-
-`[TODO]` either freeze the grammar before v1.1 or formalize a simpler subset. Tracked in §11.
+The v0.x `--filter` flag was never frozen as a stable contract and was removed in v0.11.2 because it had zero adoption. Clients that need filtering should fetch full `list --json` output and filter client-side. The `input.invalid_filter` error code is also gone.
 
 ---
 
@@ -412,7 +409,6 @@ The following can change at any time without a major version bump:
 - The order of items in `list.data` (callers must sort if they need a specific order)
 - The order of fields inside any JSON object
 - Performance characteristics
-- The grammar of `list --filter` (see §6)
 
 ---
 
@@ -442,7 +438,7 @@ Runs an MCP server over stdio so any MCP-aware agent can call ww-helper natively
 
 | MCP tool | Maps to | Notes |
 |----------|---------|-------|
-| `ww_list` | `list --json` | Filter expressions accepted but currently dropped (out-of-contract per §6) |
+| `ww_list` | `list --json` | |
 | `ww_new` | `new-path --json` | Defaults to sync; pass `no_sync: true` to skip |
 | `ww_remove` | `rm --json` | Refuses current worktree; refuses dirty without `force: true` |
 | `ww_gc` | `gc --json` | At least one of `ttl_expired`, `idle`, `merged` is required |
@@ -494,5 +490,5 @@ Still open:
 - [ ] Wire `binaryVersion` ldflags injection into `scripts/release.sh` (separate PR; default `"dev"` works in the meantime)
 - [ ] Audit `kept_branch_reason` enumeration completeness
 - [x] §4.2: `new-path --json` defaults to sync, results surface via `warnings` *(landed; see §3.4 / §4.2)*
-- [ ] §6: freeze `list --filter` grammar or keep out-of-contract for 1.0?
+- [x] §6: `list --filter` removed in v0.11.2 (zero adoption, was never in-contract)
 - [x] §10: `ww-helper mcp serve` shipped *(landed in v0.12.0; see §10 for the tool list)*

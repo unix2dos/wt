@@ -61,10 +61,10 @@ type WorktreeView struct {
 	Untracked  int    `json:"untracked"`
 }
 
-// ListOptions configures ListData.
-type ListOptions struct {
-	Filters []listFilter
-}
+// ListOptions configures ListData. Reserved for future per-call options;
+// currently empty (the v1.x `--filter` grammar was dropped before v2.0
+// because it was out-of-contract and unused).
+type ListOptions struct{}
 
 // GCOptions configures GCData. At least one of TTLExpired, IdleSet, or Merged
 // must be true; the CLI's argument parser already enforces this with
@@ -522,15 +522,16 @@ func syncIgnoredAsWarnings(ctx context.Context, repoKey, newPath string, dryRun 
 	return warnings
 }
 
-// ListData returns worktrees in the current repository, optionally filtered.
-// It does not write to any io.Writer; the CLI subcommand (`runList`) wraps
-// this with output rendering.
+// ListData returns every worktree in the current repository. It does not
+// write to any io.Writer; the CLI subcommand (`runList`) wraps this with
+// output rendering.
 //
 // The second return value is a non-fatal state-load warning — when it is
 // non-nil the data is still valid but some metadata may be missing. CLI
 // callers print it to stderr in human mode and suppress it in JSON mode;
 // MCP callers can surface it via the envelope's `warnings` array.
 func ListData(ctx context.Context, deps Deps, opts ListOptions) ([]WorktreeView, error, error) {
+	_ = opts
 	_, items, metadata, warn, err := orderedWorktrees(ctx, deps)
 	if err != nil {
 		return nil, nil, err
@@ -538,10 +539,7 @@ func ListData(ctx context.Context, deps Deps, opts ListOptions) ([]WorktreeView,
 
 	annotateExtendedStatusBestEffort(ctx, deps, items)
 
-	entries, err := filterListEntries(decorateListEntries(items, metadata), opts.Filters, time.Now())
-	if err != nil {
-		return nil, warn, err
-	}
+	entries := decorateListEntries(items, metadata)
 
 	views := make([]WorktreeView, 0, len(entries))
 	for _, entry := range entries {

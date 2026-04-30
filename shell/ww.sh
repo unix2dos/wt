@@ -95,11 +95,6 @@ ww() {
       "$ww_helper_bin" "$@"
       return $?
       ;;
-    gc)
-      printf '%s\n' "ww gc is not part of the human shell workflow." >&2
-      printf '%s\n' "Use ww rm to remove a worktree interactively, or ww-helper gc for rule-based automation." >&2
-      return 2
-      ;;
     help|-h|--help)
       ww_print_help
       return 0
