@@ -1,20 +1,20 @@
 class Ww < Formula
   desc "Fast worktree switching for safer parallel work"
   homepage "https://github.com/unix2dos/ww"
-  version "0.7.0"
+  version "0.11.0"
 
   if OS.mac? && Hardware::CPU.arm?
-    url "https://github.com/unix2dos/ww/releases/download/v0.7.0/ww-v0.7.0-darwin-arm64.tar.gz"
-    sha256 "294c52b2d508be5b5f8371dc547a578a812360cbee8ac993fec247a3a735b62e"
+    url "https://github.com/unix2dos/ww/releases/download/v0.11.0/ww-v0.11.0-darwin-arm64.tar.gz"
+    sha256 "03fee0f522ae4d7d028e0ab4413487099fec0287843fd8b71b53e3919cbc0ed7"
   elsif OS.mac? && Hardware::CPU.intel?
-    url "https://github.com/unix2dos/ww/releases/download/v0.7.0/ww-v0.7.0-darwin-amd64.tar.gz"
-    sha256 "3ce8fe8d6fc060ee7f239071174c8abb8868040b94f4fc8e182528ae82f6f86a"
+    url "https://github.com/unix2dos/ww/releases/download/v0.11.0/ww-v0.11.0-darwin-amd64.tar.gz"
+    sha256 "08264be6b7a7c658a68c9c239700aecd2488fc54ab123b2d0ea006289325fdf3"
   elsif OS.linux? && Hardware::CPU.arm?
-    url "https://github.com/unix2dos/ww/releases/download/v0.7.0/ww-v0.7.0-linux-arm64.tar.gz"
-    sha256 "0dd37a1d8168b729d769865f91022a56a64dbfed0bb75a4215c7005adf7e6b0d"
+    url "https://github.com/unix2dos/ww/releases/download/v0.11.0/ww-v0.11.0-linux-arm64.tar.gz"
+    sha256 "4a1939d29c640625fd1ddf5d3cc97d3d8017119bdf9d9102f2a99b3c7c8f6ae1"
   elsif OS.linux? && Hardware::CPU.intel?
-    url "https://github.com/unix2dos/ww/releases/download/v0.7.0/ww-v0.7.0-linux-amd64.tar.gz"
-    sha256 "e75741a2f8bb76be7deb002362bd93465065d0ba69f56102ca37622f9c346133"
+    url "https://github.com/unix2dos/ww/releases/download/v0.11.0/ww-v0.11.0-linux-amd64.tar.gz"
+    sha256 "39b851a0dec59674484b83bac5e4d30809d64903b3cfdc543429cd7165254a22"
   end
 
   def install
