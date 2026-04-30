@@ -1,5 +1,5 @@
 class Ww < Formula
-  desc "Fast worktree switching for safer parallel work"
+  desc "Worktree primitive your AI agents and you share"
   homepage "https://github.com/unix2dos/ww"
   version "0.11.0"
 

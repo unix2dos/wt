@@ -18,7 +18,7 @@ This repository ships two entrypoints:
 - Create: `ww-helper new-path --json --label agent:codex --ttl 24h <branch>`
 - List: `ww-helper list --json`
 - Resolve a target path: `ww-helper switch-path [<target>]`
-- Remove non-interactively: `ww-helper rm --json --non-interactive <target>`
+- Remove a worktree: `ww-helper rm --json <target>` (the JSON path never prompts; pass `--force` to remove a dirty worktree)
 - Review cleanup candidates: `ww-helper gc --ttl-expired --idle 7d --dry-run --json`
 
 ## Naming Conventions

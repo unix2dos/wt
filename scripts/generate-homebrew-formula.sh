@@ -112,7 +112,7 @@ mkdir -p "$(dirname "$OUTPUT_PATH")"
 {
   cat <<EOF
 class Ww < Formula
-  desc "Fast worktree switching for safer parallel work"
+  desc "Worktree primitive your AI agents and you share"
   homepage "https://github.com/$REPO"
   version "$VERSION_NO_V"
 
