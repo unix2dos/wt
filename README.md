@@ -74,6 +74,27 @@ Add one block to your MCP config and every worktree command becomes a typed tool
 }
 ```
 
+**Where to put this block** (most clients share the `mcpServers` JSON shape; the exceptions are called out):
+
+| Agent | Config location | Notes |
+|---|---|---|
+| Claude Code (project) | `.mcp.json` at repo root | this repo dogfoods one — see [`.mcp.json`](.mcp.json) |
+| Claude Code (user) | run `claude mcp add ww -- ww-helper mcp serve` | writes to `~/.claude.json` |
+| Cursor | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (user) | auto-reloads, no restart |
+| Codex | `~/.codex/config.toml` under `[mcp_servers.ww]` | **TOML, not JSON** — block shown below |
+| Zed | `~/.config/zed/settings.json` | key is **`context_servers`**, not `mcpServers` |
+| Cline (VS Code) | `cline_mcp_settings.json` in VS Code globalStorage | same JSON shape |
+
+Codex (TOML) equivalent of the block above:
+
+```toml
+[mcp_servers.ww]
+command = "ww-helper"
+args = ["mcp", "serve"]
+```
+
+After adding the config, restart the agent (Cursor auto-reloads). In Claude Code, run `/mcp` and confirm `ww` appears with the six `ww_*` tools.
+
 The server exposes six tools backed by the same v1.0 wire protocol the CLI uses: `ww_list`, `ww_new`, `ww_remove`, `ww_gc`, `ww_switch_path`, `ww_version`. Schemas are generated from the same Go structs the CLI marshals, so the data shape is identical across both transports.
 
 ### As a subprocess (any agent / shell script)
