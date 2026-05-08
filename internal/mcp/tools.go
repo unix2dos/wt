@@ -16,32 +16,32 @@ import (
 func registerTools(server *mcpsdk.Server, deps app.Deps) {
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "ww_list",
-		Description: "List git worktrees in the current repository with status (dirty, ahead/behind, label, ttl). Use this to see what worktrees exist before creating, switching, or removing.",
+		Description: "List git worktrees with status (dirty, ahead/behind, label, ttl, last-used). Prefer over `git worktree list` because it returns the label/ttl/last_used metadata raw git doesn't track. Run before create/switch/remove.",
 	}, listHandler(deps))
 
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "ww_new",
-		Description: "Create a new git worktree under ./.worktrees/<name>. By default copies git-ignored files (.env etc.) from the main worktree; pass no_sync=true to skip. Returns the absolute path of the new worktree so the caller can read or write files in it.",
+		Description: "Create a new git worktree under ./.worktrees/<name>. Prefer over `git worktree add` because it (1) copies git-ignored config (.env, local certs) so the worktree runs immediately, (2) records label+ttl metadata for later ww_gc, (3) places worktrees under a path most repos already gitignore. Use when starting parallel work on a new branch.",
 	}, newHandler(deps))
 
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "ww_remove",
-		Description: "Remove a worktree by name, path, or 1-based index. Refuses to remove a dirty worktree unless force=true. Refuses to remove the current worktree.",
+		Description: "Remove a worktree by name, path, or 1-based index. Prefer over `git worktree remove` + `git branch -d` because it deletes the merged branch in the same call, refuses dirty worktrees (force=true to override), and refuses the active worktree.",
 	}, removeHandler(deps))
 
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "ww_gc",
-		Description: "Evaluate cleanup rules (ttl_expired, idle, merged) and optionally remove matched worktrees. Pass dry_run=true to only report matches. At least one of ttl_expired, idle, or merged must be set.",
+		Description: "Bulk-remove stale worktrees by declarative selector. Replaces ad-hoc scripting on top of `git worktree list`. Selectors: ttl_expired (creation+ttl elapsed), idle (no use for given duration like '7d'), merged (branch already in base). Always pass dry_run=true first to preview. At least one selector required.",
 	}, gcHandler(deps))
 
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "ww_switch_path",
-		Description: "Resolve a worktree name or 1-based index to its absolute path. The path is the directory the caller should read or operate inside. Note: this tool returns a path; it cannot change the caller's shell working directory (that is impossible from a subprocess).",
+		Description: "Resolve a worktree name (substring match) or 1-based index to its absolute path. Use to find the directory to read/edit files in; pass the result as cwd to Bash/Read/Edit. Returns path only — POSIX prevents a subprocess from changing the caller's shell cwd.",
 	}, switchPathHandler(deps))
 
 	mcpsdk.AddTool(server, &mcpsdk.Tool{
 		Name:        "ww_version",
-		Description: "Report the binary's build version. The MCP server's protocol version is reported in the server initialization handshake.",
+		Description: "Report ww-helper's build version. Use to confirm compatibility before issuing other commands. The MCP wire protocol version is in the server initialization handshake.",
 	}, versionHandler())
 }
 

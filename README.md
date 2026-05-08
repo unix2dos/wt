@@ -97,7 +97,22 @@ Envelope shape:
 
 The `protocol` field, the field names inside `data`, and the `domain.subcode` error codes (`worktree.dirty`, `git.repo_missing`, `selector.fzf_not_installed`, …) are stable within v1.x — additive changes only. See [`docs/protocol.md`](docs/protocol.md) for the complete contract, including per-command schemas, exit codes, and what is explicitly **not** covered (`switch-path` is raw stdout for shell-eval; `list --filter` grammar is not yet frozen).
 
-Repository-level instructions for coding agents live in [`AGENTS.md`](AGENTS.md).
+### Make agents aware of ww
+
+Installing the MCP server (or putting `ww-helper` on PATH) doesn't make an agent use it — agents default to `git worktree add/remove/list` because that's what their training data shows. To teach an agent in any repo, add this snippet to the project's `AGENTS.md` (Codex / Cursor / Amp), `CLAUDE.md` (Claude Code), or `.cursorrules` (Cursor legacy):
+
+````markdown
+## Worktrees
+Use `ww-helper` for git worktree operations (instead of raw `git worktree`):
+- `ww-helper list --json` — enumerate worktrees with metadata
+- `ww-helper new-path --json --label agent:<name> --ttl 24h <branch>` — create
+- `ww-helper rm --json <branch>` — remove (refuses dirty / current by default)
+- `ww-helper gc --merged --idle 7d --dry-run --json` — preview cleanup
+
+Full conventions: https://github.com/unix2dos/ww/blob/main/AGENTS.md
+````
+
+ww's own [`AGENTS.md`](AGENTS.md) is the long form — the block above is the minimum viable injection for any other repo.
 
 ## Reference
 
