@@ -81,6 +81,23 @@ func BranchMergedIntoBase(ctx context.Context, runner Runner, path, branch, base
 	return false, nil
 }
 
+// DetachedUniqueCommits returns commits reachable from HEAD but not baseBranch.
+func DetachedUniqueCommits(ctx context.Context, runner Runner, path, baseBranch string) (int, error) {
+	out, errOut, err := runner.Run(ctx, "git", "-C", path, "rev-list", "--count", baseBranch+"..HEAD")
+	if err != nil {
+		if isNotGitRepository(err, out, errOut) {
+			return 0, ErrNotGitRepository
+		}
+		return 0, commandError("git rev-list --count base..HEAD", err, errOut)
+	}
+
+	count, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0, fmt.Errorf("parse detached unique commit count: %w", err)
+	}
+	return count, nil
+}
+
 // LastCommitSubject returns the subject of the checked-out commit in path.
 func LastCommitSubject(ctx context.Context, runner Runner, path string) (string, error) {
 	out, errOut, err := runner.Run(ctx, "git", "-C", path, "log", "-1", "--pretty=%s")
