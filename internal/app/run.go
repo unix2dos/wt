@@ -52,6 +52,7 @@ type Deps interface {
 	PreviewRemoval(ctx context.Context, item worktree.Worktree, baseBranch string) (git.RemovalPreview, error)
 	RemoveWorktree(ctx context.Context, item worktree.Worktree, opts git.RemoveOptions) (git.RemoveResult, error)
 	LastCommitSubject(ctx context.Context, worktreePath string) (string, error)
+	DetachedUniqueCommits(ctx context.Context, worktreePath, baseBranch string) (int, error)
 }
 
 type appError struct {
@@ -156,6 +157,10 @@ func (d RealDeps) RemoveWorktree(ctx context.Context, item worktree.Worktree, op
 
 func (d RealDeps) LastCommitSubject(ctx context.Context, worktreePath string) (string, error) {
 	return git.LastCommitSubject(ctx, git.ExecRunner{}, worktreePath)
+}
+
+func (d RealDeps) DetachedUniqueCommits(ctx context.Context, worktreePath, baseBranch string) (int, error) {
+	return git.DetachedUniqueCommits(ctx, git.ExecRunner{}, worktreePath, baseBranch)
 }
 
 func Run(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut io.Writer, deps Deps) int {
@@ -412,7 +417,7 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 	}
 	warnStateIssue(errOut, warn)
 
-	annotateExtendedStatusBestEffort(ctx, deps, items)
+	baseBranch := annotateExtendedStatusForList(ctx, deps, items)
 
 	entries := decorateListEntries(items, metadata)
 	if len(entries) == 0 {
@@ -425,7 +430,7 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 
 	tableEntries := make([]ui.ListTableEntry, 0, len(entries))
 	for _, entry := range entries {
-		detail := listVerboseDetail(ctx, deps, entry, cfg.verbose)
+		detail := listDetail(ctx, deps, entry, cfg.verbose, baseBranch)
 		tableEntries = append(tableEntries, ui.ListTableEntry{
 			Worktree: entry.item,
 			Detail:   detail,
@@ -439,6 +444,59 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 	}
 	fmt.Fprintln(out, ui.FormatSummary(worktrees))
 	return 0
+}
+
+func annotateExtendedStatusForList(ctx context.Context, deps Deps, items []worktree.Worktree) string {
+	baseBranch, err := deps.DefaultBranch(ctx)
+	if err != nil {
+		return ""
+	}
+	_ = deps.AnnotateExtendedStatus(ctx, items, baseBranch)
+	return baseBranch
+}
+
+func listDetail(ctx context.Context, deps Deps, entry listEntry, verbose bool, baseBranch string) string {
+	parts := make([]string, 0, 2)
+	if detached := listDetachedDetail(ctx, deps, entry.item, baseBranch); detached != "" {
+		parts = append(parts, detached)
+	}
+	if verboseDetail := listVerboseDetail(ctx, deps, entry, verbose); verboseDetail != "" {
+		parts = append(parts, verboseDetail)
+	}
+	return strings.Join(parts, "\n")
+}
+
+func listDetachedDetail(ctx context.Context, deps Deps, item worktree.Worktree, baseBranch string) string {
+	if !item.IsDetached || baseBranch == "" {
+		return ""
+	}
+
+	uniqueCommits, err := deps.DetachedUniqueCommits(ctx, item.Path, baseBranch)
+	if err != nil {
+		return ""
+	}
+
+	hasLocalChanges := item.IsDirty || item.Staged+item.Unstaged+item.Untracked > 0
+	if uniqueCommits == 0 {
+		if hasLocalChanges {
+			return "has local changes"
+		}
+		return "idle scratch"
+	}
+
+	summary := fmt.Sprintf("%d unbranched commits", uniqueCommits)
+	if uniqueCommits == 1 {
+		summary = "1 unbranched commit"
+	}
+	if hasLocalChanges {
+		summary += " + local changes"
+	}
+
+	subject, err := deps.LastCommitSubject(ctx, item.Path)
+	if err != nil || subject == "" {
+		return summary
+	}
+	return summary + "\nlast commit: " + subject
 }
 
 func listVerboseDetail(ctx context.Context, deps Deps, entry listEntry, verbose bool) string {

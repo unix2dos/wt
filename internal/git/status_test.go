@@ -125,3 +125,19 @@ func TestLastCommitSubjectReturnsTrimmedSubject(t *testing.T) {
 		t.Fatalf("expected trimmed subject, got %q", subject)
 	}
 }
+
+func TestDetachedUniqueCommitsParsesRevListCount(t *testing.T) {
+	runner := fakeRunner{
+		outputs: map[string]string{
+			key("git", "-C", "/repo", "rev-list", "--count", "main..HEAD"): "2\n",
+		},
+	}
+
+	count, err := DetachedUniqueCommits(context.Background(), runner, "/repo", "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 unique commits, got %d", count)
+	}
+}

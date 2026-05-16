@@ -921,6 +921,65 @@ func TestRunListKeepsDefaultOutputFocusedOnWorktrees(t *testing.T) {
 	}
 }
 
+func TestRunListShowsDetachedActionableDetails(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		repoKey:       "/repo/.git",
+		defaultBranch: "main",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", BranchRef: "refs/heads/main", IsCurrent: true},
+			{Path: "/repo/.worktrees/idle", BranchLabel: "(detached)", IsDetached: true},
+			{Path: "/repo/.worktrees/dirty", BranchLabel: "(detached)", IsDetached: true, IsDirty: true, Unstaged: 1},
+			{Path: "/repo/.worktrees/commits", BranchLabel: "(detached)", IsDetached: true},
+			{Path: "/repo/.worktrees/mixed", BranchLabel: "(detached)", IsDetached: true, IsDirty: true, Untracked: 1},
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", BranchRef: "refs/heads/alpha"},
+		},
+		detachedUniqueCommits: map[string]int{
+			"/repo/.worktrees/idle":    0,
+			"/repo/.worktrees/dirty":   0,
+			"/repo/.worktrees/commits": 2,
+			"/repo/.worktrees/mixed":   1,
+		},
+		lastCommitSubjects: map[string]string{
+			"/repo/.worktrees/idle":    "Merge pull request #15",
+			"/repo/.worktrees/commits": "Fix login fallback",
+			"/repo/.worktrees/mixed":   "Repair token refresh",
+			"/repo/.worktrees/alpha":   "Alpha branch commit",
+		},
+	}
+
+	code := Run(context.Background(), []string{"list"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	out := ui.StripAnsi(stdout.String())
+	for _, want := range []string{
+		"idle scratch",
+		"has local changes",
+		"2 unbranched commits",
+		"last commit: Fix login fallback",
+		"1 unbranched commit + local changes",
+		"last commit: Repair token refresh",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected list output to contain %q, got %q", want, out)
+		}
+	}
+	for _, unexpected := range []string{
+		"Merge pull request #15",
+		"Alpha branch commit",
+	} {
+		if strings.Contains(out, unexpected) {
+			t.Fatalf("expected list output not to contain %q, got %q", unexpected, out)
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
 func TestRunGCRequiresAtLeastOneRule(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -2331,34 +2390,35 @@ type envelopeError struct {
 }
 
 type fakeDeps struct {
-	repoKey             string
-	repoKeyErr          error
-	worktrees           []worktree.Worktree
-	err                 error
-	fzfSelected         worktree.Worktree
-	fzfErr              error
-	tuiSelected         worktree.Worktree
-	tuiErr              error
-	createPath          string
-	createErr           error
-	loadErr             error
-	touchErr            error
-	state               map[string]map[string]int64
-	metadata            map[string]map[string]state.WorktreeMetadata
-	touched             *touchRecord
-	recorded            *recordWorktreeCall
-	worktreeGitPath     string
-	worktreeGitPathErr  error
-	worktreeGitPathCall *gitPathCall
-	defaultBranch       string
-	defaultBranchErr    error
-	previews            map[string]git.RemovalPreview
-	previewErr          error
-	removeResult        git.RemoveResult
-	removeErr           error
-	removed             *removeCall
-	removedCalls        *[]removeCall
-	lastCommitSubjects  map[string]string
+	repoKey               string
+	repoKeyErr            error
+	worktrees             []worktree.Worktree
+	err                   error
+	fzfSelected           worktree.Worktree
+	fzfErr                error
+	tuiSelected           worktree.Worktree
+	tuiErr                error
+	createPath            string
+	createErr             error
+	loadErr               error
+	touchErr              error
+	state                 map[string]map[string]int64
+	metadata              map[string]map[string]state.WorktreeMetadata
+	touched               *touchRecord
+	recorded              *recordWorktreeCall
+	worktreeGitPath       string
+	worktreeGitPathErr    error
+	worktreeGitPathCall   *gitPathCall
+	defaultBranch         string
+	defaultBranchErr      error
+	previews              map[string]git.RemovalPreview
+	previewErr            error
+	removeResult          git.RemoveResult
+	removeErr             error
+	removed               *removeCall
+	removedCalls          *[]removeCall
+	lastCommitSubjects    map[string]string
+	detachedUniqueCommits map[string]int
 }
 
 type touchRecord struct {
@@ -2579,4 +2639,11 @@ func (f fakeDeps) LastCommitSubject(_ context.Context, worktreePath string) (str
 		return "", nil
 	}
 	return f.lastCommitSubjects[worktreePath], nil
+}
+
+func (f fakeDeps) DetachedUniqueCommits(_ context.Context, worktreePath, _ string) (int, error) {
+	if f.detachedUniqueCommits == nil {
+		return 0, nil
+	}
+	return f.detachedUniqueCommits[worktreePath], nil
 }
