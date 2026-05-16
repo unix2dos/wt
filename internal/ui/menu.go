@@ -70,7 +70,7 @@ func colorizeStatus(item worktree.Worktree) string {
 func aheadBehindWidth(items []worktree.Worktree) int {
 	max := 0
 	for _, item := range items {
-		w := VisualLen(FormatAheadBehind(item.Ahead, item.Behind))
+		w := VisualLen(FormatWorktreeAheadBehind(item))
 		if w > max {
 			max = w
 		}
@@ -146,7 +146,7 @@ func formatEnhancedMenuRow(item worktree.Worktree, branchWidth, abWidth, fcWidth
 	branchCol := PadRight(branchStr, branchWidth)
 
 	// Ahead/behind column
-	abStr := FormatAheadBehind(item.Ahead, item.Behind)
+	abStr := FormatWorktreeAheadBehind(item)
 	abCol := PadRight(abStr, abWidth)
 
 	// File changes column
