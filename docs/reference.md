@@ -348,11 +348,12 @@ The config file is optional. A missing file uses all built-in defaults. `XDG_CON
 ww rm
 ww rm feat-a
 ww rm --force feat-a
+ww rm --cleanup
 ```
 
 `ww rm` (no target) opens an interactive selector for review-and-remove. With a target, it removes that worktree directly after confirmation. The branch is deleted only when it is already merged into the effective base branch. Dirty worktrees stop before confirmation unless you explicitly rerun with `--force`.
 
-When saved workspace context exists, the summary card also includes that context and weak-boundary warnings such as detached state or missing context.
+`ww rm --cleanup` removes all clearly safe worktrees after one confirmation. Safe means clean files, already merged, and not the base branch. The prompt shows numbered names plus each last commit subject, and keeps base-branch, detached, dirty, or unmerged worktrees out of the deletion list.
 
 ### Typical Flow
 
@@ -363,6 +364,7 @@ ww switch feat-a
 ww list
 ww new feat-b
 ww rm feat-a
+ww rm --cleanup  # delete all clearly safe worktrees after one confirmation
 ww rm           # interactive picker for review-and-remove
 ```
 

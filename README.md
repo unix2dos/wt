@@ -51,6 +51,7 @@ ww                # interactive switch
 ww new feat-demo  # create + cd into a new worktree
 ww list           # see all worktrees with status
 ww rm feat-demo   # remove with safety preview
+ww rm --cleanup   # delete clean, merged non-base worktrees after one confirmation
 ```
 
 For the fastest interactive switch, install `fzf`. If `fzf` is not on PATH, `ww` falls back to a built-in selector — the workflow still works without extra setup.

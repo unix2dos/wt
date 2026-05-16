@@ -4,7 +4,8 @@ Usage:
   ww [switch] [<index>|<name>]
   ww list
   ww new <name>
-  ww rm [--force] [<name>]
+  ww rm [--force] [<name>]    Remove one worktree.
+  ww rm --cleanup             Remove clearly safe worktrees.
   ww version
   ww help
 
@@ -12,7 +13,7 @@ Commands:
   switch   Select a worktree and change into it. Default when omitted.
   list     Print worktrees without changing directory.
   new      Create a worktree under ./.worktrees/<name> and enter it.
-  rm       Remove one worktree.
+  rm       Remove worktrees.
   version  Print the binary and protocol version.
   help     Show this help.
 
@@ -26,6 +27,7 @@ Examples:
   ww switch feat-a
   ww new feat-demo
   ww rm feat-demo
+  ww rm --cleanup
   ww --version
 EOF
 }
