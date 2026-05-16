@@ -80,3 +80,37 @@ func TestFormatListTableShowsDetailOutsidePathCell(t *testing.T) {
 		t.Fatalf("expected branch and detail in table output, got %q", stripped)
 	}
 }
+
+func TestFormatListTableHidesAheadBehindForMergedWorktrees(t *testing.T) {
+	got := FormatListTable([]ListTableEntry{
+		{
+			Worktree: worktree.Worktree{
+				Index:       2,
+				BranchLabel: "fix/merged",
+				Path:        "/repo/.worktrees/fix-merged",
+				IsMerged:    true,
+				Ahead:       4,
+				Behind:      9,
+			},
+		},
+		{
+			Worktree: worktree.Worktree{
+				Index:       3,
+				BranchLabel: "feat/open",
+				Path:        "/repo/.worktrees/feat-open",
+				Ahead:       2,
+				Behind:      1,
+			},
+		},
+	})
+
+	stripped := StripAnsi(got)
+	for _, line := range strings.Split(stripped, "\n") {
+		if strings.Contains(line, "fix/merged") && (strings.Contains(line, "↑4") || strings.Contains(line, "↓9")) {
+			t.Fatalf("expected merged row to hide ahead/behind, got line %q in table %q", line, stripped)
+		}
+	}
+	if !strings.Contains(stripped, "feat/open") || !strings.Contains(stripped, "↑2 ↓1") {
+		t.Fatalf("expected open branch to keep ahead/behind, got %q", stripped)
+	}
+}

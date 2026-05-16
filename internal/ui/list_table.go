@@ -84,7 +84,7 @@ func listTableRows(entry ListTableEntry, branchWidth int) []string {
 		if i == 0 {
 			index = fmt.Sprintf("%d", entry.Worktree.Index)
 			status = StatusText(entry.Worktree)
-			ab = FormatAheadBehind(entry.Worktree.Ahead, entry.Worktree.Behind)
+			ab = FormatWorktreeAheadBehind(entry.Worktree)
 			changes = FormatFileChanges(entry.Worktree.Staged, entry.Worktree.Unstaged, entry.Worktree.Untracked)
 		}
 		branch := lineAt(branchLines, i)
