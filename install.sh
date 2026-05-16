@@ -168,6 +168,9 @@ append_shell_wrapper() {
 install_artifacts() {
   local helper_path="$BIN_DIR/ww-helper"
   local shell_path="$BIN_DIR/ww.sh"
+  local commit=""
+  local dirty="false"
+  local ldflags=""
 
   mkdir -p "$BIN_DIR"
   if [ -x "$REPO_ROOT/bin/ww-helper" ]; then
@@ -175,7 +178,14 @@ install_artifacts() {
     chmod +x "$helper_path"
   else
     cd "$REPO_ROOT"
-    go build -buildvcs=false -o "$helper_path" ./cmd/ww-helper
+    if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      commit="$(git rev-parse --short HEAD 2>/dev/null || true)"
+      if [ -n "$(git status --porcelain 2>/dev/null || true)" ]; then
+        dirty="true"
+      fi
+    fi
+    ldflags="-X 'ww/internal/app.buildCommit=$commit' -X 'ww/internal/app.buildDirty=$dirty'"
+    go build -buildvcs=false -ldflags "$ldflags" -o "$helper_path" ./cmd/ww-helper
   fi
   cp "$REPO_ROOT/shell/ww.sh" "$shell_path"
   chmod +x "$shell_path"

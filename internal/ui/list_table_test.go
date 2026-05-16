@@ -56,3 +56,27 @@ func TestFormatListTableWrapsLongPathInsidePathCell(t *testing.T) {
 		t.Fatalf("expected full path content across wrapped lines, got %q", stripped)
 	}
 }
+
+func TestFormatListTableShowsDetailOutsidePathCell(t *testing.T) {
+	got := FormatListTable([]ListTableEntry{
+		{
+			Worktree: worktree.Worktree{
+				Index:       2,
+				BranchLabel: "(detached)",
+				Path:        "/repo/.worktrees/scratch",
+				IsDetached:  true,
+			},
+			Detail: "idle scratch",
+		},
+	})
+
+	stripped := StripAnsi(got)
+	for _, line := range strings.Split(stripped, "\n") {
+		if strings.Contains(line, "idle scratch") && strings.Contains(line, "/repo/.worktrees/scratch") {
+			t.Fatalf("expected detail to be separate from path cell, got line %q in table %q", line, stripped)
+		}
+	}
+	if !strings.Contains(stripped, "(detached)") || !strings.Contains(stripped, "idle scratch") {
+		t.Fatalf("expected branch and detail in table output, got %q", stripped)
+	}
+}

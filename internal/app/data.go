@@ -388,12 +388,18 @@ func SwitchPathData(ctx context.Context, deps Deps, target string) (SwitchPathRe
 // inside `data`, to avoid skew between the two.
 type VersionResult struct {
 	Binary string `json:"binary"`
+	Commit string `json:"commit,omitempty"`
+	Dirty  bool   `json:"dirty"`
 }
 
 // VersionData returns the binary's build version. The CLI subcommand wraps
 // this; MCP exposes it as the `ww_version` tool.
 func VersionData() VersionResult {
-	return VersionResult{Binary: binaryVersion}
+	return VersionResult{
+		Binary: binaryVersion,
+		Commit: buildCommit,
+		Dirty:  buildDirty == "true",
+	}
 }
 
 // NewPathOptions configures NewPathData.

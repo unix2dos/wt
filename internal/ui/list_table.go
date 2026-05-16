@@ -11,7 +11,7 @@ const listIndexWidth = len(humanIndexHeader)
 const listPathWidth = 48
 const listABHeader = "AHEAD/BEHIND"
 const listChangesHeader = "CHANGES"
-const listABWidth = len(listABHeader)     // 12
+const listABWidth = len(listABHeader)           // 12
 const listChangesWidth = len(listChangesHeader) // 7
 
 type ListTableEntry struct {
@@ -55,33 +55,50 @@ func listBranchWidth(entries []ListTableEntry) int {
 	for _, entry := range entries {
 		items = append(items, entry.Worktree)
 	}
-	return normalizedBranchWidth(HumanBranchWidth(items))
+	width := normalizedBranchWidth(HumanBranchWidth(items))
+	for _, entry := range entries {
+		for _, line := range strings.Split(entry.Detail, "\n") {
+			if len(line) > width {
+				width = len(line)
+			}
+		}
+	}
+	return width
 }
 
 func listTableRows(entry ListTableEntry, branchWidth int) []string {
-	pathContent := entry.Worktree.Path
+	branchContent := entry.Worktree.BranchLabel
 	if entry.Detail != "" {
-		pathContent += "\n" + entry.Detail
+		branchContent += "\n" + entry.Detail
 	}
 
-	pathLines := wrapCell(pathContent, listPathWidth)
-	rows := make([]string, 0, len(pathLines))
-	for i, pathLine := range pathLines {
+	branchLines := wrapCell(branchContent, branchWidth)
+	pathLines := wrapCell(entry.Worktree.Path, listPathWidth)
+	rowCount := max(len(branchLines), len(pathLines))
+	rows := make([]string, 0, rowCount)
+	for i := 0; i < rowCount; i++ {
 		index := ""
 		status := ""
-		branch := ""
 		ab := ""
 		changes := ""
 		if i == 0 {
 			index = fmt.Sprintf("%d", entry.Worktree.Index)
 			status = StatusText(entry.Worktree)
-			branch = entry.Worktree.BranchLabel
 			ab = FormatAheadBehind(entry.Worktree.Ahead, entry.Worktree.Behind)
 			changes = FormatFileChanges(entry.Worktree.Staged, entry.Worktree.Unstaged, entry.Worktree.Untracked)
 		}
+		branch := lineAt(branchLines, i)
+		pathLine := lineAt(pathLines, i)
 		rows = append(rows, listTableRow(index, status, branch, ab, changes, pathLine, branchWidth))
 	}
 	return rows
+}
+
+func lineAt(lines []string, index int) string {
+	if index < 0 || index >= len(lines) {
+		return ""
+	}
+	return lines[index]
 }
 
 func listTableRow(index, status, branch, ab, changes, path string, branchWidth int) string {

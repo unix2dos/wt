@@ -52,6 +52,16 @@ func TestInstallIsIdempotentAndBuildsBinary(t *testing.T) {
 		t.Fatalf("expected ww shell library to exist: %v", err)
 	}
 
+	versionOutput, err := exec.Command(binPath, "version").CombinedOutput()
+	if err != nil {
+		t.Fatalf("run installed ww-helper version: %v\n%s", err, versionOutput)
+	}
+	if strings.Contains(string(versionOutput), "ww-helper dev (protocol") {
+		t.Fatalf("expected local install to include commit metadata, got %q", string(versionOutput))
+	}
+	if !strings.Contains(string(versionOutput), "ww-helper dev+") {
+		t.Fatalf("expected dev commit in local install version output, got %q", string(versionOutput))
+	}
 }
 
 func TestInstallSupportsCustomRcFileAndBinDir(t *testing.T) {

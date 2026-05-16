@@ -27,7 +27,7 @@ The human-facing `ww` command is **not** covered by this contract. Its output ma
 - Within a major version: additive changes only (new commands, new optional fields, new error codes documented as additive).
 - A major version bump (e.g. `2.0`) is required to remove or change the meaning of an existing field.
 - Every JSON envelope carries a top-level `"protocol"` field whose value is the semver string of the contract that envelope conforms to (e.g. `"1.0"`). Clients should branch on the **major** component only; minor bumps are guaranteed additive.
-- A `ww-helper version --json` command will return the binary version and the protocol version it implements. **`[TODO]` ship this command before v1.0.**
+- A `ww-helper version --json` command returns the binary version, protocol version, and build metadata when available.
 
 ---
 
@@ -286,7 +286,9 @@ If you need structured output for resolution, use `list --json` and resolve clie
   "ok": true,
   "command": "version",
   "data": {
-    "binary": "v0.11.0"
+    "binary": "dev",
+    "commit": "bde782e",
+    "dirty": false
   },
   "warnings": []
 }
@@ -297,10 +299,12 @@ If you need structured output for resolution, use `list --json` and resolve clie
 | Field | Type | Meaning | Stability |
 |-------|------|---------|-----------|
 | `binary` | string | Build version of the binary. `"dev"` for unreleased builds; otherwise the release tag (e.g. `"v0.11.0"`). Injected at build time via ldflags | stable |
+| `commit` | string | Short Git commit embedded at build time when available. Omitted when the build source is not a Git checkout or the installer cannot resolve it | stable |
+| `dirty` | boolean | Whether the source checkout had uncommitted changes when the binary was built | stable |
 
 The protocol version is intentionally **not** duplicated inside `data` — it already lives at the envelope's top-level `protocol` field. Pulling it from `data` would invite skew between the two.
 
-**Without `--json`:** prints a single line `ww-helper <binary> (protocol <protocol>)\n` to stdout. This text form is **not** covered by the contract.
+**Without `--json`:** prints a single line `ww-helper <binary> (protocol <protocol>)\n` to stdout. Local dev builds with commit metadata display as `dev+<commit>` and append `-dirty` when built from a dirty checkout. This text form is **not** covered by the contract.
 
 ### 4.6 `rm --json`
 
@@ -496,7 +500,8 @@ Still open:
 - [x] Drop `exit_code` from error envelope payload *(done)*
 - [x] Add `warnings` array to all success envelopes (default `[]`) *(done)*
 - [x] Add `ww-helper version --json` command *(done in `feat/protocol-v1.0`)*
-- [ ] Wire `binaryVersion` ldflags injection into `scripts/release.sh` (separate PR; default `"dev"` works in the meantime)
+- [x] Wire `binaryVersion` ldflags injection into `scripts/release.sh`
+- [x] Wire local install commit metadata into dev builds
 - [ ] Audit `kept_branch_reason` enumeration completeness
 - [x] §4.2: `new-path --json` defaults to sync, results surface via `warnings` *(landed; see §3.4 / §4.2)*
 - [x] §6: `list --filter` removed in v0.11.2 (zero adoption, was never in-contract)

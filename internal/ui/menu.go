@@ -115,6 +115,9 @@ func FormatSummary(items []worktree.Worktree) string {
 
 	k := len(safeIndices)
 	hint := fmt.Sprintf("ww rm %s", safeIndices[0])
+	if k > 1 {
+		hint = "ww rm --cleanup"
+	}
 	return fmt.Sprintf("%s · %d safe to remove (%s)", base, k, hint)
 }
 

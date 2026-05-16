@@ -2332,6 +2332,32 @@ func TestRunVersionHumanOutput(t *testing.T) {
 	}
 }
 
+func TestRunVersionHumanOutputIncludesDevCommitWhenAvailable(t *testing.T) {
+	oldVersion := binaryVersion
+	oldCommit := buildCommit
+	oldDirty := buildDirty
+	binaryVersion = "dev"
+	buildCommit = "abc1234"
+	buildDirty = "false"
+	defer func() {
+		binaryVersion = oldVersion
+		buildCommit = oldCommit
+		buildDirty = oldDirty
+	}()
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := Run(context.Background(), []string{"version"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if got := stdout.String(); !strings.Contains(got, "ww-helper dev+abc1234 (protocol "+protocolVersion+")") {
+		t.Fatalf("expected dev commit in human version line, got %q", got)
+	}
+}
+
 func TestRunVersionJSONEnvelope(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -2352,10 +2378,46 @@ func TestRunVersionJSONEnvelope(t *testing.T) {
 
 	var data struct {
 		Binary string `json:"binary"`
+		Commit string `json:"commit"`
+		Dirty  bool   `json:"dirty"`
 	}
 	decodeEnvelopeData(t, envelope, &data)
 	if data.Binary != binaryVersion {
 		t.Fatalf("expected binary=%q, got %q", binaryVersion, data.Binary)
+	}
+}
+
+func TestRunVersionJSONEnvelopeIncludesBuildCommit(t *testing.T) {
+	oldVersion := binaryVersion
+	oldCommit := buildCommit
+	oldDirty := buildDirty
+	binaryVersion = "dev"
+	buildCommit = "abc1234"
+	buildDirty = "true"
+	defer func() {
+		binaryVersion = oldVersion
+		buildCommit = oldCommit
+		buildDirty = oldDirty
+	}()
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := Run(context.Background(), []string{"version", "--json"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+
+	envelope := decodeEnvelope(t, stdout.String())
+	var data struct {
+		Binary string `json:"binary"`
+		Commit string `json:"commit"`
+		Dirty  bool   `json:"dirty"`
+	}
+	decodeEnvelopeData(t, envelope, &data)
+	if data.Binary != "dev" || data.Commit != "abc1234" || !data.Dirty {
+		t.Fatalf("expected dev build metadata, got %#v", data)
 	}
 }
 
