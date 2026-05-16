@@ -92,7 +92,7 @@ func TestRenderMenuSingularWorktree(t *testing.T) {
 	}
 }
 
-func TestRenderMenuSummaryShowsOnlyFirstSafeIndex(t *testing.T) {
+func TestRenderMenuSummaryRecommendsCleanupForMultipleSafeWorktrees(t *testing.T) {
 	var buf bytes.Buffer
 
 	items := []worktree.Worktree{
@@ -107,11 +107,11 @@ func TestRenderMenuSummaryShowsOnlyFirstSafeIndex(t *testing.T) {
 	if !strings.Contains(got, "2 safe to remove") {
 		t.Fatalf("expected '2 safe to remove' in summary, got %q", got)
 	}
-	if !strings.Contains(got, "ww rm 2)") {
-		t.Fatalf("expected hint with only first index 'ww rm 2)', got %q", got)
+	if !strings.Contains(got, "ww rm --cleanup)") {
+		t.Fatalf("expected cleanup hint, got %q", got)
 	}
-	if strings.Contains(got, "ww rm 2 3") {
-		t.Fatalf("should not show all indices, got %q", got)
+	if strings.Contains(got, "ww rm 2)") || strings.Contains(got, "ww rm 2 3") {
+		t.Fatalf("should not recommend one-by-one removal when multiple are safe, got %q", got)
 	}
 }
 

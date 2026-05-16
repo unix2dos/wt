@@ -108,7 +108,7 @@ If you installed into Bash, reload `~/.bashrc` instead.
 - `ww list` prints worktrees without changing directory. `ww list --verbose` adds labels, intent, and metadata.
 - `ww new <name>` creates a new worktree under `./.worktrees/<name>` and switches into it.
 - `ww rm [<name>]` removes a worktree and deletes its branch only when that branch is already merged into the effective base branch. Without a target, `ww rm` opens an interactive selector for review-and-remove.
-- `ww version` (or `ww --version`) prints the binary and protocol version.
+- `ww version` (or `ww --version`) prints the binary and protocol version. Local dev installs include the embedded Git commit when available.
 - `ww help` or `ww --help` prints the command summary.
 - `ww` uses `fzf` automatically when available and falls back to the built-in arrow-key selector otherwise.
 

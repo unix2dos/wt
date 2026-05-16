@@ -250,8 +250,19 @@ func runVersion(args []string, out io.Writer, errOut io.Writer) int {
 		return writeJSONSuccess(out, "version", VersionData())
 	}
 
-	fmt.Fprintf(out, "ww-helper %s (protocol %s)\n", binaryVersion, protocolVersion)
+	fmt.Fprintf(out, "ww-helper %s (protocol %s)\n", humanVersionLabel(), protocolVersion)
 	return 0
+}
+
+func humanVersionLabel() string {
+	label := binaryVersion
+	if label == "dev" && buildCommit != "" {
+		label += "+" + buildCommit
+	}
+	if buildDirty == "true" {
+		label += "-dirty"
+	}
+	return label
 }
 
 func runInit(args []string, out io.Writer, errOut io.Writer) int {
@@ -1364,6 +1375,12 @@ const protocolVersion = "1.0"
 //
 //	go build -ldflags "-X 'ww/internal/app.binaryVersion=v0.4.0'" ./cmd/ww-helper
 var binaryVersion = "dev"
+
+// buildCommit and buildDirty are injected by local/release builds when Git
+// metadata is available. They are intentionally separate from binaryVersion
+// so unreleased local builds can still say "dev+<commit>".
+var buildCommit = ""
+var buildDirty = "false"
 
 // nanosToMillis converts an internal unix-nanosecond timestamp to the
 // unix-millisecond form documented in protocol §4.1. A zero input (no value)
