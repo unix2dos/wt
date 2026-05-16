@@ -1565,15 +1565,206 @@ func TestRunSwitchPathInteractiveSelectionReturnsNonZeroOnEOFWithoutSelection(t 
 	}
 }
 
-func TestRunRmRejectsCleanupFlag(t *testing.T) {
+func TestRunRmCleanupShowsSafeNamesReasonAndCommitSubjects(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run(context.Background(), []string{"rm", "--cleanup"}, strings.NewReader(""), stdout, stderr, fakeDeps{})
-	if code != 2 {
-		t.Fatalf("expected exit code 2 for unknown flag, got %d", code)
+	removedCalls := []removeCall{}
+	deps := fakeDeps{
+		repoKey:       "/repo/.git",
+		defaultBranch: "main",
+		removedCalls:  &removedCalls,
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", BranchRef: "refs/heads/main", IsCurrent: true},
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", BranchRef: "refs/heads/alpha"},
+			{Path: "/repo/.worktrees/beta", BranchLabel: "beta", BranchRef: "refs/heads/beta"},
+			{Path: "/repo/.worktrees/detached", BranchLabel: "(detached)", IsDetached: true},
+			{Path: "/repo/.worktrees/dirty", BranchLabel: "dirty", BranchRef: "refs/heads/dirty"},
+		},
+		previews: map[string]git.RemovalPreview{
+			"/repo/.worktrees/alpha": {
+				Worktree:     worktree.Worktree{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", BranchRef: "refs/heads/alpha"},
+				BaseBranch:   "main",
+				BranchMerged: true,
+				DeleteBranch: true,
+			},
+			"/repo/.worktrees/beta": {
+				Worktree:     worktree.Worktree{Path: "/repo/.worktrees/beta", BranchLabel: "beta", BranchRef: "refs/heads/beta"},
+				BaseBranch:   "main",
+				BranchMerged: true,
+				DeleteBranch: true,
+			},
+			"/repo/.worktrees/detached": {
+				Worktree:   worktree.Worktree{Path: "/repo/.worktrees/detached", BranchLabel: "(detached)", IsDetached: true},
+				BaseBranch: "main",
+			},
+			"/repo/.worktrees/dirty": {
+				Worktree:     worktree.Worktree{Path: "/repo/.worktrees/dirty", BranchLabel: "dirty", BranchRef: "refs/heads/dirty"},
+				BaseBranch:   "main",
+				Dirty:        true,
+				BranchMerged: true,
+				DeleteBranch: true,
+			},
+		},
+		lastCommitSubjects: map[string]string{
+			"/repo/.worktrees/alpha": "Add alpha feature",
+			"/repo/.worktrees/beta":  "Fix beta behavior",
+		},
 	}
-	if !strings.Contains(stderr.String(), "unknown option: --cleanup") {
-		t.Fatalf("expected unknown option error, got %q", stderr.String())
+
+	code := Run(context.Background(), []string{"rm", "--cleanup"}, strings.NewReader("y\n"), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	gotPrompt := stderr.String()
+	plainPrompt := ui.StripAnsi(gotPrompt)
+	for _, want := range []string{
+		"2 worktrees are safe to delete.",
+		"Safe because: clean files, already merged, not the base branch.",
+		"1. alpha",
+		"   last commit: Add alpha feature",
+		"2. beta",
+		"   last commit: Fix beta behavior",
+		"1 worktree needs review.",
+		"Run ww rm to remove one manually.",
+		"1 worktree is blocked.",
+		"Delete these 2? [y/N]",
+	} {
+		if !strings.Contains(plainPrompt, want) {
+			t.Fatalf("expected cleanup prompt to contain %q, got %q", want, plainPrompt)
+		}
+	}
+	for _, want := range []string{
+		ui.Green("2 worktrees are safe to delete."),
+		ui.Dim("Safe because: clean files, already merged, not the base branch."),
+		ui.Bold("alpha"),
+		ui.Dim("   last commit: Add alpha feature"),
+		ui.Yellow("1 worktree needs review."),
+		ui.Red("1 worktree is blocked."),
+		ui.Bold("Delete these 2? [y/N] "),
+	} {
+		if !strings.Contains(gotPrompt, want) {
+			t.Fatalf("expected cleanup prompt to contain colored segment %q, got %q", want, gotPrompt)
+		}
+	}
+	for _, unexpected := range []string{"detached", "/repo/.worktrees", "dirty"} {
+		if strings.Contains(plainPrompt, unexpected) {
+			t.Fatalf("expected cleanup prompt to hide %q, got %q", unexpected, plainPrompt)
+		}
+	}
+	if len(removedCalls) != 2 {
+		t.Fatalf("expected two removed worktrees, got %#v", removedCalls)
+	}
+	if removedCalls[0].item.BranchLabel != "alpha" || removedCalls[1].item.BranchLabel != "beta" {
+		t.Fatalf("expected alpha and beta removal calls, got %#v", removedCalls)
+	}
+	if !strings.Contains(stdout.String(), "Removed alpha") || !strings.Contains(stdout.String(), "Removed beta") {
+		t.Fatalf("expected removal output for alpha and beta, got %q", stdout.String())
+	}
+}
+
+func TestRunRmCleanupWithNoSafeWorktreesDoesNotPrompt(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	removedCalls := []removeCall{}
+	deps := fakeDeps{
+		repoKey:       "/repo/.git",
+		defaultBranch: "main",
+		removedCalls:  &removedCalls,
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", BranchRef: "refs/heads/main", IsCurrent: true},
+			{Path: "/repo/.worktrees/detached", BranchLabel: "(detached)", IsDetached: true},
+			{Path: "/repo/.worktrees/dirty", BranchLabel: "dirty", BranchRef: "refs/heads/dirty"},
+		},
+		previews: map[string]git.RemovalPreview{
+			"/repo/.worktrees/detached": {
+				Worktree:   worktree.Worktree{Path: "/repo/.worktrees/detached", BranchLabel: "(detached)", IsDetached: true},
+				BaseBranch: "main",
+			},
+			"/repo/.worktrees/dirty": {
+				Worktree:     worktree.Worktree{Path: "/repo/.worktrees/dirty", BranchLabel: "dirty", BranchRef: "refs/heads/dirty"},
+				BaseBranch:   "main",
+				Dirty:        true,
+				BranchMerged: true,
+				DeleteBranch: true,
+			},
+		},
+	}
+
+	code := Run(context.Background(), []string{"rm", "--cleanup"}, strings.NewReader(""), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout, got %q", stdout.String())
+	}
+	if len(removedCalls) != 0 {
+		t.Fatalf("expected no removals, got %#v", removedCalls)
+	}
+	got := stderr.String()
+	for _, want := range []string{
+		"No worktrees are clearly safe to delete.",
+		"1 worktree needs review.",
+		"1 worktree is blocked.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected no-safe output to contain %q, got %q", want, got)
+		}
+	}
+	if strings.Contains(got, "[y/N]") {
+		t.Fatalf("expected no confirmation prompt, got %q", got)
+	}
+}
+
+func TestRunRmCleanupDoesNotOfferBaseBranchWorktree(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	removedCalls := []removeCall{}
+	deps := fakeDeps{
+		repoKey:       "/repo/.git",
+		defaultBranch: "main",
+		removedCalls:  &removedCalls,
+		worktrees: []worktree.Worktree{
+			{Path: "/repo/.worktrees/codex", BranchLabel: "(detached)", IsDetached: true, IsCurrent: true},
+			{Path: "/repo", BranchLabel: "main", BranchRef: "refs/heads/main"},
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", BranchRef: "refs/heads/alpha"},
+		},
+		previews: map[string]git.RemovalPreview{
+			"/repo": {
+				Worktree:     worktree.Worktree{Path: "/repo", BranchLabel: "main", BranchRef: "refs/heads/main"},
+				BaseBranch:   "main",
+				BranchMerged: true,
+				DeleteBranch: false,
+			},
+			"/repo/.worktrees/alpha": {
+				Worktree:     worktree.Worktree{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", BranchRef: "refs/heads/alpha"},
+				BaseBranch:   "main",
+				BranchMerged: true,
+				DeleteBranch: true,
+			},
+		},
+		lastCommitSubjects: map[string]string{
+			"/repo":                  "Merge pull request #15",
+			"/repo/.worktrees/alpha": "Add alpha feature",
+		},
+	}
+
+	code := Run(context.Background(), []string{"rm", "--cleanup"}, strings.NewReader("y\n"), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	gotPrompt := stderr.String()
+	plainPrompt := ui.StripAnsi(gotPrompt)
+	if strings.Contains(plainPrompt, "  main") || strings.Contains(plainPrompt, "Merge pull request #15") {
+		t.Fatalf("expected cleanup prompt not to offer base branch, got %q", plainPrompt)
+	}
+	if !strings.Contains(plainPrompt, "1. alpha") {
+		t.Fatalf("expected cleanup prompt to offer merged non-base branch, got %q", plainPrompt)
+	}
+	if len(removedCalls) != 1 || removedCalls[0].item.BranchLabel != "alpha" {
+		t.Fatalf("expected only alpha to be removed, got %#v", removedCalls)
 	}
 }
 
@@ -2166,6 +2357,8 @@ type fakeDeps struct {
 	removeResult        git.RemoveResult
 	removeErr           error
 	removed             *removeCall
+	removedCalls        *[]removeCall
+	lastCommitSubjects  map[string]string
 }
 
 type touchRecord struct {
@@ -2363,8 +2556,27 @@ func (f fakeDeps) RemoveWorktree(_ context.Context, item worktree.Worktree, opts
 		f.removed.item = item
 		f.removed.opts = opts
 	}
+	if f.removedCalls != nil {
+		*f.removedCalls = append(*f.removedCalls, removeCall{item: item, opts: opts})
+	}
 	if f.removeErr != nil {
 		return git.RemoveResult{}, f.removeErr
 	}
-	return f.removeResult, nil
+	if f.removeResult.WorktreePath != "" || f.removeResult.Branch != "" {
+		return f.removeResult, nil
+	}
+	return git.RemoveResult{
+		WorktreePath:    item.Path,
+		Branch:          item.BranchLabel,
+		BaseBranch:      opts.BaseBranch,
+		RemovedWorktree: true,
+		DeletedBranch:   item.BranchRef != "",
+	}, nil
+}
+
+func (f fakeDeps) LastCommitSubject(_ context.Context, worktreePath string) (string, error) {
+	if f.lastCommitSubjects == nil {
+		return "", nil
+	}
+	return f.lastCommitSubjects[worktreePath], nil
 }

@@ -109,3 +109,19 @@ func TestBranchMergedIntoBaseReturnsFalseWhenNotMerged(t *testing.T) {
 		t.Fatal("expected merged=false")
 	}
 }
+
+func TestLastCommitSubjectReturnsTrimmedSubject(t *testing.T) {
+	runner := fakeRunner{
+		outputs: map[string]string{
+			key("git", "-C", "/repo", "log", "-1", "--pretty=%s"): "Add cleanup flow\n",
+		},
+	}
+
+	subject, err := LastCommitSubject(context.Background(), runner, "/repo")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if subject != "Add cleanup flow" {
+		t.Fatalf("expected trimmed subject, got %q", subject)
+	}
+}

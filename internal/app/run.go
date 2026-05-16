@@ -51,6 +51,7 @@ type Deps interface {
 	AnnotateExtendedStatus(ctx context.Context, items []worktree.Worktree, baseBranch string) error
 	PreviewRemoval(ctx context.Context, item worktree.Worktree, baseBranch string) (git.RemovalPreview, error)
 	RemoveWorktree(ctx context.Context, item worktree.Worktree, opts git.RemoveOptions) (git.RemoveResult, error)
+	LastCommitSubject(ctx context.Context, worktreePath string) (string, error)
 }
 
 type appError struct {
@@ -151,6 +152,10 @@ func (d RealDeps) PreviewRemoval(ctx context.Context, item worktree.Worktree, ba
 
 func (d RealDeps) RemoveWorktree(ctx context.Context, item worktree.Worktree, opts git.RemoveOptions) (git.RemoveResult, error) {
 	return git.RemoveWorktree(ctx, git.ExecRunner{}, item, opts)
+}
+
+func (d RealDeps) LastCommitSubject(ctx context.Context, worktreePath string) (string, error) {
+	return git.LastCommitSubject(ctx, git.ExecRunner{}, worktreePath)
 }
 
 func Run(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut io.Writer, deps Deps) int {
@@ -459,13 +464,13 @@ func listVerboseDetail(ctx context.Context, deps Deps, entry listEntry, verbose 
 }
 
 type newPathConfig struct {
-	json        bool
-	name        string
-	label       string
-	ttl         string
-	message     string
-	noSync      bool
-	syncDryRun  bool
+	json       bool
+	name       string
+	label      string
+	ttl        string
+	message    string
+	noSync     bool
+	syncDryRun bool
 }
 
 func runNewPath(ctx context.Context, args []string, out io.Writer, errOut io.Writer, deps Deps) int {
@@ -692,9 +697,10 @@ func runGC(ctx context.Context, args []string, out io.Writer, errOut io.Writer, 
 }
 
 type removeConfig struct {
-	force  bool
-	json   bool
-	target string
+	force   bool
+	json    bool
+	cleanup bool
+	target  string
 }
 
 type removalCandidate struct {
@@ -714,6 +720,10 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 			return writeCommandError("rm", out, errOut, true, err)
 		}
 		return writeJSONSuccess(out, "rm", result)
+	}
+
+	if cfg.cleanup {
+		return runRemoveCleanup(ctx, in, out, errOut, deps)
 	}
 
 	// Human path keeps the interactive prompt flow.
@@ -837,6 +847,8 @@ func parseRemoveArgs(args []string) (removeConfig, error) {
 			cfg.force = true
 		case arg == "--json":
 			cfg.json = true
+		case arg == "--cleanup":
+			cfg.cleanup = true
 		case strings.HasPrefix(arg, "-"):
 			return cfg, appError{Code: "input.invalid_argument", Message: fmt.Sprintf("unknown option: %s", arg), ExitCode: 2}
 		default:
@@ -844,6 +856,16 @@ func parseRemoveArgs(args []string) (removeConfig, error) {
 				return cfg, appError{Code: "input.invalid_argument", Message: fmt.Sprintf("unexpected extra arguments: %s", strings.Join(args[i:], " ")), ExitCode: 2}
 			}
 			cfg.target = arg
+		}
+	}
+	if cfg.cleanup {
+		switch {
+		case cfg.json:
+			return cfg, appError{Code: "input.invalid_argument", Message: "--cleanup is only available for human-readable rm", ExitCode: 2}
+		case cfg.force:
+			return cfg, appError{Code: "input.invalid_argument", Message: "--cleanup cannot be combined with --force", ExitCode: 2}
+		case cfg.target != "":
+			return cfg, appError{Code: "input.invalid_argument", Message: "--cleanup cannot be combined with a target", ExitCode: 2}
 		}
 	}
 	return cfg, nil
@@ -1072,6 +1094,124 @@ func matchRemovalCandidate(candidates []removalCandidate, target string) (remova
 		return removalCandidate{}, err
 	}
 	return byPath[selected.Path], nil
+}
+
+func runRemoveCleanup(ctx context.Context, in io.Reader, out io.Writer, errOut io.Writer, deps Deps) int {
+	_, items, _, warn, err := orderedWorktrees(ctx, deps)
+	if err != nil {
+		return writeCommandError("rm", out, errOut, false, err)
+	}
+	warnStateIssue(errOut, warn)
+
+	baseBranch, err := deps.DefaultBranch(ctx)
+	if err != nil {
+		return writeCommandError("rm", out, errOut, false, err)
+	}
+
+	type cleanupCandidate struct {
+		item          worktree.Worktree
+		commitSubject string
+	}
+
+	var safe []cleanupCandidate
+	reviewCount := 0
+	blockedCount := 0
+	for _, item := range filterNonCurrent(items) {
+		preview, err := deps.PreviewRemoval(ctx, item, baseBranch)
+		if err != nil {
+			return writeCommandError("rm", out, errOut, false, err)
+		}
+		switch {
+		case preview.Dirty:
+			blockedCount++
+		case item.BranchRef != "" && item.BranchLabel != baseBranch && preview.BranchMerged:
+			subject, _ := deps.LastCommitSubject(ctx, item.Path)
+			safe = append(safe, cleanupCandidate{item: item, commitSubject: subject})
+		default:
+			reviewCount++
+		}
+	}
+
+	if len(safe) == 0 {
+		fmt.Fprintln(errOut, ui.Yellow("No worktrees are clearly safe to delete."))
+		if reviewCount > 0 {
+			fmt.Fprintln(errOut, ui.Yellow(cleanupNeedsReview(reviewCount)+"."))
+		}
+		if blockedCount > 0 {
+			fmt.Fprintln(errOut, ui.Red(cleanupBlocked(blockedCount)+"."))
+		}
+		return 0
+	}
+
+	fmt.Fprintln(errOut, ui.Green(cleanupSafeToDelete(len(safe))+"."))
+	fmt.Fprintln(errOut, ui.Dim("Safe because: clean files, already merged, not the base branch."))
+	fmt.Fprintln(errOut)
+	for i, candidate := range safe {
+		fmt.Fprintf(errOut, "%d. %s\n", i+1, ui.Bold(removalCandidateLabel(candidate.item)))
+		if candidate.commitSubject != "" {
+			fmt.Fprintln(errOut, ui.Dim(fmt.Sprintf("   last commit: %s", candidate.commitSubject)))
+		}
+		if i != len(safe)-1 {
+			fmt.Fprintln(errOut)
+		}
+	}
+	if reviewCount > 0 || blockedCount > 0 {
+		fmt.Fprintln(errOut)
+	}
+	if reviewCount > 0 {
+		fmt.Fprintln(errOut, ui.Yellow(cleanupNeedsReview(reviewCount)+"."))
+		fmt.Fprintln(errOut, ui.Dim("Run ww rm to remove one manually."))
+	}
+	if blockedCount > 0 {
+		fmt.Fprintln(errOut, ui.Red(cleanupBlocked(blockedCount)+"."))
+	}
+	fmt.Fprintln(errOut)
+
+	reader := bufio.NewReader(in)
+	confirmed, err := confirmPrompt(reader, errOut, ui.Bold(cleanupDeletePrompt(len(safe))))
+	if err != nil {
+		return writeSelectionError(errOut, err)
+	}
+	if !confirmed {
+		return 130
+	}
+
+	for _, candidate := range safe {
+		result, err := deps.RemoveWorktree(ctx, candidate.item, git.RemoveOptions{BaseBranch: baseBranch})
+		if err != nil {
+			return writeCommandError("rm", out, errOut, false, err)
+		}
+		writeRemoveHuman(out, result)
+	}
+	return 0
+}
+
+func cleanupSafeToDelete(n int) string {
+	if n == 1 {
+		return "1 worktree is safe to delete"
+	}
+	return fmt.Sprintf("%d worktrees are safe to delete", n)
+}
+
+func cleanupNeedsReview(n int) string {
+	if n == 1 {
+		return "1 worktree needs review"
+	}
+	return fmt.Sprintf("%d worktrees need review", n)
+}
+
+func cleanupBlocked(n int) string {
+	if n == 1 {
+		return "1 worktree is blocked"
+	}
+	return fmt.Sprintf("%d worktrees are blocked", n)
+}
+
+func cleanupDeletePrompt(n int) string {
+	if n == 1 {
+		return "Delete this worktree? [y/N] "
+	}
+	return fmt.Sprintf("Delete these %d? [y/N] ", n)
 }
 
 func renderRemovalCandidates(w io.Writer, candidates []removalCandidate) {
@@ -1364,7 +1504,8 @@ func printHelperHelp(out io.Writer) {
 	fmt.Fprintln(out, "new-path creates a worktree and prints its path.")
 	fmt.Fprintln(out, "init prints shell code that activates ww for zsh or bash.")
 	fmt.Fprintln(out, "gc evaluates explicit cleanup rules and prints matched worktrees.")
-	fmt.Fprintln(out, "rm removes a worktree and optionally deletes its merged branch.")
+	fmt.Fprintln(out, "rm removes one worktree.")
+	fmt.Fprintln(out, "rm --cleanup removes clearly safe worktrees.")
 	fmt.Fprintln(out, "version prints the binary and protocol version. Pass --json for the envelope form.")
 	fmt.Fprintln(out, "help prints this command summary.")
 }

@@ -47,8 +47,8 @@ func TestPagesDemoContract(t *testing.T) {
 	if !strings.Contains(readme, "ww new feat-demo") {
 		t.Fatalf("expected README to document simple worktree creation")
 	}
-	if strings.Contains(readme, "--cleanup") {
-		t.Fatalf("expected README to stop referencing the removed --cleanup flag")
+	if !strings.Contains(readme, "ww rm --cleanup") {
+		t.Fatalf("expected README to document safe cleanup")
 	}
 	if strings.Contains(readme, "--non-interactive") {
 		t.Fatalf("expected README to stop referencing the removed --non-interactive flag")
@@ -80,6 +80,8 @@ func TestPagesDemoContract(t *testing.T) {
 		"ww-helper new-path --json --label agent:claude-code --ttl 24h -m",
 		"ww-helper gc --ttl-expired --idle 7d --dry-run --json",
 		"protocol.md",
+		"ww rm --cleanup",
+		"last commit subject",
 		"[CURRENT]",
 		"[DIRTY]",
 		"┌───────┬",
@@ -95,7 +97,6 @@ func TestPagesDemoContract(t *testing.T) {
 		"ww gc --idle 7d",
 		"ww gc --merged",
 		"ACTIVE*",
-		"ww rm --cleanup",
 		"--non-interactive",
 		"WORKTREE_DIRTY",
 		"AMBIGUOUS_MATCH",

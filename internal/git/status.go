@@ -80,3 +80,15 @@ func BranchMergedIntoBase(ctx context.Context, runner Runner, path, branch, base
 	}
 	return false, nil
 }
+
+// LastCommitSubject returns the subject of the checked-out commit in path.
+func LastCommitSubject(ctx context.Context, runner Runner, path string) (string, error) {
+	out, errOut, err := runner.Run(ctx, "git", "-C", path, "log", "-1", "--pretty=%s")
+	if err != nil {
+		if isNotGitRepository(err, out, errOut) {
+			return "", ErrNotGitRepository
+		}
+		return "", commandError("git log -1 --pretty=%s", err, errOut)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
