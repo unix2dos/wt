@@ -134,7 +134,7 @@ func TestCLIListsWorktrees(t *testing.T) {
 		t.Fatalf("unexpected error: %v\nstderr: %s", err, stderr.String())
 	}
 
-	if !strings.Contains(stdout.String(), "│ INDEX │ STATUS") || !strings.Contains(stdout.String(), "│ 1     │ [CURRENT]") || !strings.Contains(stdout.String(), "/.worktrees/") || !strings.Contains(stdout.String(), "alpha") {
+	if !strings.Contains(stdout.String(), "│ INDEX │ STATUS") || !strings.Contains(stdout.String(), "│ 1     │ [CURRENT]") || !strings.Contains(stdout.String(), ".worktrees/alpha") {
 		t.Fatalf("expected human-readable list output, got %q", stdout.String())
 	}
 }
@@ -167,10 +167,10 @@ func TestCLIListStaysInCreationOrderAfterSwitch(t *testing.T) {
 	}
 
 	got := stdout.String()
-	if strings.Index(got, "│ 1     │ [CURRENT]") > strings.Index(got, "/.worktrees/alpha") {
+	if strings.Index(got, "│ 1     │ [CURRENT]") > strings.Index(got, ".worktrees/alpha") {
 		t.Fatalf("expected main before alpha in creation ordering, got %q", got)
 	}
-	if strings.Index(got, "/.worktrees/alpha") > strings.Index(got, "/.worktrees/beta") {
+	if strings.Index(got, ".worktrees/alpha") > strings.Index(got, ".worktrees/beta") {
 		t.Fatalf("expected alpha before beta in creation ordering, got %q", got)
 	}
 }
