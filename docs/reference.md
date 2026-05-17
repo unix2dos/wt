@@ -353,7 +353,7 @@ ww rm --force feat-a
 ww rm --cleanup
 ```
 
-`ww rm` (no target) opens an interactive selector for review-and-remove. With a target, it removes that worktree directly after confirmation. The branch is deleted only when it is already merged into the effective base branch. Dirty worktrees stop before confirmation unless you explicitly rerun with `--force`.
+`ww rm` (no target) opens an interactive selector for review-and-remove. The selector marks clean merged worktrees as `safe` and marks dirty, unmerged, or branchless worktrees as `review` with a short reason. With a target, it removes that worktree directly after confirmation. The branch is deleted only when it is already merged into the effective base branch. Dirty worktrees stop before confirmation unless you explicitly rerun with `--force`.
 
 `ww rm --cleanup` removes all clearly safe worktrees after one confirmation. Safe means clean files, already merged, and not the base branch. The prompt shows numbered names plus each last commit subject, and keeps base-branch, detached, dirty, or unmerged worktrees out of the deletion list.
 
