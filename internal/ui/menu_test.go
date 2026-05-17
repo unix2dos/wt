@@ -131,6 +131,26 @@ func TestRenderMenuMergedWithDirtyNotSafeToRemove(t *testing.T) {
 	}
 }
 
+func TestRenderMenuHidesAheadBehindForMergedWorktrees(t *testing.T) {
+	var buf bytes.Buffer
+
+	items := []worktree.Worktree{
+		{Index: 1, BranchLabel: "fix/merged", Path: "/wt/fix-merged", IsMerged: true, Ahead: 5, Behind: 3},
+		{Index: 2, BranchLabel: "feat-open", Path: "/wt/feat-open", Ahead: 2, Behind: 1},
+	}
+
+	RenderMenu(&buf, items)
+	stripped := StripAnsi(buf.String())
+	for _, line := range strings.Split(stripped, "\n") {
+		if strings.Contains(line, "fix/merged") && (strings.Contains(line, "↑5") || strings.Contains(line, "↓3")) {
+			t.Fatalf("expected merged menu row to hide ahead/behind, got line %q in output %q", line, stripped)
+		}
+	}
+	if !strings.Contains(stripped, "feat-open") || !strings.Contains(stripped, "↑2 ↓1") {
+		t.Fatalf("expected open menu row to keep ahead/behind, got %q", stripped)
+	}
+}
+
 func TestReadSelectionRetriesAfterInvalidInput(t *testing.T) {
 	var stderr bytes.Buffer
 

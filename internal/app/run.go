@@ -441,11 +441,7 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 
 	tableEntries := make([]ui.ListTableEntry, 0, len(entries))
 	for _, entry := range entries {
-		detail := listDetail(ctx, deps, entry, cfg.verbose, baseBranch)
-		tableEntries = append(tableEntries, ui.ListTableEntry{
-			Worktree: entry.item,
-			Detail:   detail,
-		})
+		tableEntries = append(tableEntries, listTableEntry(ctx, deps, entry, cfg.verbose, baseBranch))
 	}
 	fmt.Fprintln(out, ui.FormatListTable(tableEntries))
 
@@ -466,38 +462,51 @@ func annotateExtendedStatusForList(ctx context.Context, deps Deps, items []workt
 	return baseBranch
 }
 
-func listDetail(ctx context.Context, deps Deps, entry listEntry, verbose bool, baseBranch string) string {
+func listTableEntry(ctx context.Context, deps Deps, entry listEntry, verbose bool, baseBranch string) ui.ListTableEntry {
+	item := entry.item
 	parts := make([]string, 0, 2)
-	if detached := listDetachedDetail(ctx, deps, entry.item, baseBranch); detached != "" {
-		parts = append(parts, detached)
+	if detached, ok := listDetachedPresentation(ctx, deps, entry.item, baseBranch); ok {
+		item.BranchLabel = detached.branch
+		if detached.detail != "" {
+			parts = append(parts, detached.detail)
+		}
 	}
 	if verboseDetail := listVerboseDetail(ctx, deps, entry, verbose); verboseDetail != "" {
 		parts = append(parts, verboseDetail)
 	}
-	return strings.Join(parts, "\n")
+	return ui.ListTableEntry{
+		Worktree: item,
+		Detail:   strings.Join(parts, "\n"),
+	}
 }
 
-func listDetachedDetail(ctx context.Context, deps Deps, item worktree.Worktree, baseBranch string) string {
+type detachedListPresentation struct {
+	branch string
+	detail string
+}
+
+func listDetachedPresentation(ctx context.Context, deps Deps, item worktree.Worktree, baseBranch string) (detachedListPresentation, bool) {
 	if !item.IsDetached || baseBranch == "" {
-		return ""
+		return detachedListPresentation{}, false
 	}
 
 	uniqueCommits, err := deps.DetachedUniqueCommits(ctx, item.Path, baseBranch)
 	if err != nil {
-		return ""
+		return detachedListPresentation{}, false
 	}
 
 	hasLocalChanges := item.IsDirty || item.Staged+item.Unstaged+item.Untracked > 0
 	if uniqueCommits == 0 {
+		presentation := detachedListPresentation{branch: "scratch", detail: "idle"}
 		if hasLocalChanges {
-			return "has local changes"
+			presentation.detail = "local changes"
 		}
-		return "idle scratch"
+		return presentation, true
 	}
 
-	summary := fmt.Sprintf("%d unbranched commits", uniqueCommits)
+	summary := fmt.Sprintf("%d commits", uniqueCommits)
 	if uniqueCommits == 1 {
-		summary = "1 unbranched commit"
+		summary = "1 commit"
 	}
 	if hasLocalChanges {
 		summary += " + local changes"
@@ -505,9 +514,9 @@ func listDetachedDetail(ctx context.Context, deps Deps, item worktree.Worktree, 
 
 	subject, err := deps.LastCommitSubject(ctx, item.Path)
 	if err != nil || subject == "" {
-		return summary
+		return detachedListPresentation{branch: "unbranched", detail: summary}, true
 	}
-	return summary + "\nlast commit: " + subject
+	return detachedListPresentation{branch: "unbranched", detail: summary + "\nlast commit: " + subject}, true
 }
 
 func listVerboseDetail(ctx context.Context, deps Deps, entry listEntry, verbose bool) string {

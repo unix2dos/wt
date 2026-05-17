@@ -99,7 +99,7 @@ func formatFzfCandidates(items []worktree.Worktree) []byte {
 			branchStr = Dim(branchStr)
 		}
 
-		abStr := FormatAheadBehind(item.Ahead, item.Behind)
+		abStr := FormatWorktreeAheadBehind(item)
 		fcStr := FormatFileChanges(item.Staged, item.Unstaged, item.Untracked)
 
 		pathStr := item.Path

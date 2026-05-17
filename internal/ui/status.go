@@ -54,3 +54,10 @@ func FormatAheadBehind(ahead, behind int) string {
 	}
 	return strings.Join(parts, " ")
 }
+
+func FormatWorktreeAheadBehind(item worktree.Worktree) string {
+	if item.IsMerged {
+		return ""
+	}
+	return FormatAheadBehind(item.Ahead, item.Behind)
+}

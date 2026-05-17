@@ -956,11 +956,13 @@ func TestRunListShowsDetachedActionableDetails(t *testing.T) {
 	}
 	out := ui.StripAnsi(stdout.String())
 	for _, want := range []string{
-		"idle scratch",
-		"has local changes",
-		"2 unbranched commits",
+		"scratch",
+		"idle",
+		"local changes",
+		"unbranched",
+		"2 commits",
 		"last commit: Fix login fallback",
-		"1 unbranched commit + local changes",
+		"1 commit + local changes",
 		"last commit: Repair token refresh",
 	} {
 		if !strings.Contains(out, want) {
@@ -968,6 +970,10 @@ func TestRunListShowsDetachedActionableDetails(t *testing.T) {
 		}
 	}
 	for _, unexpected := range []string{
+		"(detached)",
+		"idle scratch",
+		"has local changes",
+		"unbranched commit",
 		"Merge pull request #15",
 		"Alpha branch commit",
 	} {
