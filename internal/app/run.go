@@ -471,8 +471,10 @@ func listTableEntry(ctx context.Context, deps Deps, entry listEntry, verbose boo
 		item.Path = listDisplayPath(item.Path, displayRoot)
 	}
 	parts := make([]string, 0, 2)
+	status := ""
 	if detached, ok := listDetachedPresentation(ctx, deps, entry.item, baseBranch); ok {
 		item.BranchLabel = detached.branch
+		status = detached.status
 		if detached.detail != "" {
 			parts = append(parts, detached.detail)
 		}
@@ -482,6 +484,7 @@ func listTableEntry(ctx context.Context, deps Deps, entry listEntry, verbose boo
 	}
 	return ui.ListTableEntry{
 		Worktree: item,
+		Status:   status,
 		Detail:   strings.Join(parts, "\n"),
 	}
 }
@@ -527,6 +530,7 @@ func relativePathWithin(root string, path string) (string, bool) {
 
 type detachedListPresentation struct {
 	branch string
+	status string
 	detail string
 }
 
@@ -542,8 +546,9 @@ func listDetachedPresentation(ctx context.Context, deps Deps, item worktree.Work
 
 	hasLocalChanges := item.IsDirty || item.Staged+item.Unstaged+item.Untracked > 0
 	if uniqueCommits == 0 {
-		presentation := detachedListPresentation{branch: "scratch", detail: "idle"}
+		presentation := detachedListPresentation{branch: "scratch", status: "[IDLE]"}
 		if hasLocalChanges {
+			presentation.status = ""
 			presentation.detail = "local changes"
 		}
 		return presentation, true

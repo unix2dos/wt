@@ -16,6 +16,7 @@ const listChangesWidth = len(listChangesHeader) // 7
 
 type ListTableEntry struct {
 	Worktree worktree.Worktree
+	Status   string
 	Detail   string
 }
 
@@ -116,7 +117,10 @@ func listTableRows(entry ListTableEntry, branchWidth int, columns listTableColum
 		changes := ""
 		if i == 0 {
 			index = fmt.Sprintf("%d", entry.Worktree.Index)
-			status = StatusText(entry.Worktree)
+			status = entry.Status
+			if status == "" {
+				status = StatusText(entry.Worktree)
+			}
 			ab = FormatWorktreeAheadBehind(entry.Worktree)
 			changes = FormatFileChanges(entry.Worktree.Staged, entry.Worktree.Unstaged, entry.Worktree.Untracked)
 		}

@@ -1015,8 +1015,8 @@ func TestRunListShowsDetachedActionableDetails(t *testing.T) {
 	}
 	out := ui.StripAnsi(stdout.String())
 	for _, want := range []string{
+		"[IDLE]",
 		"scratch",
-		"idle",
 		"local changes",
 		"unbranched",
 		"2 commits",
@@ -1038,6 +1038,14 @@ func TestRunListShowsDetachedActionableDetails(t *testing.T) {
 	} {
 		if strings.Contains(out, unexpected) {
 			t.Fatalf("expected list output not to contain %q, got %q", unexpected, out)
+		}
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, ".worktrees/idle") && (!strings.Contains(line, "[IDLE]") || !strings.Contains(line, "scratch")) {
+			t.Fatalf("expected idle scratch to stay on one status row, got line %q in %q", line, out)
+		}
+		if strings.Contains(line, "│ idle") && !strings.Contains(line, "[IDLE]") {
+			t.Fatalf("expected idle not to render as branch detail, got line %q in %q", line, out)
 		}
 	}
 	if stderr.Len() != 0 {
