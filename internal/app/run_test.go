@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -2582,6 +2583,40 @@ func TestRunVersionHumanOutputIncludesDevCommitWhenAvailable(t *testing.T) {
 	}
 }
 
+func TestRunVersionHumanOutputFallsBackToGoBuildInfo(t *testing.T) {
+	oldVersion := binaryVersion
+	oldCommit := buildCommit
+	oldDirty := buildDirty
+	oldReadBuildInfo := readBuildInfo
+	binaryVersion = "dev"
+	buildCommit = ""
+	buildDirty = "false"
+	readBuildInfo = func() (*debug.BuildInfo, bool) {
+		return &debug.BuildInfo{Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "abcdef1234567890"},
+			{Key: "vcs.modified", Value: "true"},
+		}}, true
+	}
+	defer func() {
+		binaryVersion = oldVersion
+		buildCommit = oldCommit
+		buildDirty = oldDirty
+		readBuildInfo = oldReadBuildInfo
+	}()
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := Run(context.Background(), []string{"version"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if got := stdout.String(); !strings.Contains(got, "ww-helper dev+abcdef1-dirty (protocol "+protocolVersion+")") {
+		t.Fatalf("expected go build info commit in human version line, got %q", got)
+	}
+}
+
 func TestRunVersionJSONEnvelope(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -2642,6 +2677,48 @@ func TestRunVersionJSONEnvelopeIncludesBuildCommit(t *testing.T) {
 	decodeEnvelopeData(t, envelope, &data)
 	if data.Binary != "dev" || data.Commit != "abc1234" || !data.Dirty {
 		t.Fatalf("expected dev build metadata, got %#v", data)
+	}
+}
+
+func TestRunVersionJSONEnvelopeFallsBackToGoBuildInfo(t *testing.T) {
+	oldVersion := binaryVersion
+	oldCommit := buildCommit
+	oldDirty := buildDirty
+	oldReadBuildInfo := readBuildInfo
+	binaryVersion = "dev"
+	buildCommit = ""
+	buildDirty = "false"
+	readBuildInfo = func() (*debug.BuildInfo, bool) {
+		return &debug.BuildInfo{Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "1234567890abcdef"},
+			{Key: "vcs.modified", Value: "false"},
+		}}, true
+	}
+	defer func() {
+		binaryVersion = oldVersion
+		buildCommit = oldCommit
+		buildDirty = oldDirty
+		readBuildInfo = oldReadBuildInfo
+	}()
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := Run(context.Background(), []string{"version", "--json"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+
+	envelope := decodeEnvelope(t, stdout.String())
+	var data struct {
+		Binary string `json:"binary"`
+		Commit string `json:"commit"`
+		Dirty  bool   `json:"dirty"`
+	}
+	decodeEnvelopeData(t, envelope, &data)
+	if data.Binary != "dev" || data.Commit != "1234567" || data.Dirty {
+		t.Fatalf("expected go build info metadata, got %#v", data)
 	}
 }
 

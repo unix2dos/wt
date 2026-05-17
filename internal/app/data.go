@@ -11,7 +11,9 @@ package app
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"strconv"
+	"strings"
 	"time"
 
 	"ww/internal/git"
@@ -392,13 +394,46 @@ type VersionResult struct {
 	Dirty  bool   `json:"dirty"`
 }
 
+var readBuildInfo = debug.ReadBuildInfo
+
+func buildMetadata() (string, bool) {
+	commit := buildCommit
+	dirty := buildDirty == "true"
+	if commit != "" {
+		return commit, dirty
+	}
+
+	info, ok := readBuildInfo()
+	if !ok || info == nil {
+		return "", dirty
+	}
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			commit = shortCommit(setting.Value)
+		case "vcs.modified":
+			dirty = dirty || setting.Value == "true"
+		}
+	}
+	return commit, dirty
+}
+
+func shortCommit(commit string) string {
+	commit = strings.TrimSpace(commit)
+	if len(commit) <= 7 {
+		return commit
+	}
+	return commit[:7]
+}
+
 // VersionData returns the binary's build version. The CLI subcommand wraps
 // this; MCP exposes it as the `ww_version` tool.
 func VersionData() VersionResult {
+	commit, dirty := buildMetadata()
 	return VersionResult{
 		Binary: binaryVersion,
-		Commit: buildCommit,
-		Dirty:  buildDirty == "true",
+		Commit: commit,
+		Dirty:  dirty,
 	}
 }
 

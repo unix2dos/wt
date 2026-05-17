@@ -299,7 +299,7 @@ If you need structured output for resolution, use `list --json` and resolve clie
 | Field | Type | Meaning | Stability |
 |-------|------|---------|-----------|
 | `binary` | string | Build version of the binary. `"dev"` for unreleased builds; otherwise the release tag (e.g. `"v0.11.0"`). Injected at build time via ldflags | stable |
-| `commit` | string | Short Git commit embedded at build time when available. Omitted when the build source is not a Git checkout or the installer cannot resolve it | stable |
+| `commit` | string | Short Git commit resolved from injected build metadata or Go build VCS metadata when available. Omitted when the build source is not a Git checkout or no VCS metadata is present | stable |
 | `dirty` | boolean | Whether the source checkout had uncommitted changes when the binary was built | stable |
 
 The protocol version is intentionally **not** duplicated inside `data` — it already lives at the envelope's top-level `protocol` field. Pulling it from `data` would invite skew between the two.

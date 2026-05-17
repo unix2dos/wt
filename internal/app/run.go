@@ -256,10 +256,11 @@ func runVersion(args []string, out io.Writer, errOut io.Writer) int {
 
 func humanVersionLabel() string {
 	label := binaryVersion
-	if label == "dev" && buildCommit != "" {
-		label += "+" + buildCommit
+	commit, dirty := buildMetadata()
+	if label == "dev" && commit != "" {
+		label += "+" + commit
 	}
-	if buildDirty == "true" {
+	if dirty {
 		label += "-dirty"
 	}
 	return label
