@@ -443,7 +443,9 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 	for _, entry := range entries {
 		tableEntries = append(tableEntries, listTableEntry(ctx, deps, entry, cfg.verbose, baseBranch))
 	}
-	fmt.Fprintln(out, ui.FormatListTable(tableEntries))
+	fmt.Fprintln(out, ui.FormatListTableWithOptions(tableEntries, ui.ListTableOptions{
+		ShowEmptyOptionalColumns: cfg.verbose,
+	}))
 
 	worktrees := make([]worktree.Worktree, 0, len(entries))
 	for _, entry := range entries {
