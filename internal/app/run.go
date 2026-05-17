@@ -1295,19 +1295,26 @@ func cleanupDeletePrompt(n int) string {
 func renderRemovalCandidates(w io.Writer, candidates []removalCandidate) {
 	fmt.Fprintln(w, "Remove which worktree?")
 	fmt.Fprintln(w)
-	hasDirty := false
 	for i, c := range candidates {
 		label := removalCandidateLabel(c.item)
-		if c.preview.Dirty {
-			fmt.Fprintf(w, "  %d  %s  ●\n", i+1, label)
-			hasDirty = true
-		} else {
-			fmt.Fprintf(w, "  %d  %s\n", i+1, label)
-		}
+		status, reason := removalCandidateJudgement(c)
+		fmt.Fprintf(w, "  %d  %s  %s  %s\n", i+1, status, label, reason)
 	}
-	if hasDirty {
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, "● uncommitted changes")
+}
+
+func removalCandidateJudgement(candidate removalCandidate) (string, string) {
+	preview := candidate.preview
+	switch {
+	case preview.Dirty:
+		return ui.Yellow("! review"), ui.Dim("local changes")
+	case candidate.item.BranchRef == "":
+		return ui.Yellow("! review"), ui.Dim("no branch")
+	case preview.DeleteBranch:
+		return ui.Green("✓ safe  "), ui.Dim("clean + merged")
+	case !preview.BranchMerged:
+		return ui.Yellow("! review"), ui.Dim("not merged")
+	default:
+		return ui.Yellow("! review"), ui.Dim("branch kept")
 	}
 }
 

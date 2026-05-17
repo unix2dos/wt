@@ -1857,7 +1857,7 @@ func TestRunRmRejectsNonInteractiveFlag(t *testing.T) {
 	}
 }
 
-func TestRunRmInteractiveShowsFlatListAndConfirms(t *testing.T) {
+func TestRunRmInteractiveShowsSafetyJudgementAndConfirms(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	removed := &removeCall{}
@@ -1898,20 +1898,17 @@ func TestRunRmInteractiveShowsFlatListAndConfirms(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
-	if !strings.Contains(stderr.String(), "Remove which worktree?") {
+	errOutput := ui.StripAnsi(stderr.String())
+	if !strings.Contains(errOutput, "Remove which worktree?") {
 		t.Fatalf("expected flat list header, got %q", stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "1  alpha") {
-		t.Fatalf("expected alpha in list, got %q", stderr.String())
+	if !strings.Contains(errOutput, "1  ✓ safe    alpha") ||
+		!strings.Contains(errOutput, "clean + merged") {
+		t.Fatalf("expected alpha with safe judgement, got %q", errOutput)
 	}
-	if !strings.Contains(stderr.String(), "2  beta  ●") {
-		t.Fatalf("expected beta with dirty marker, got %q", stderr.String())
-	}
-	if !strings.Contains(stderr.String(), "● uncommitted changes") {
-		t.Fatalf("expected dirty footnote, got %q", stderr.String())
-	}
-	if strings.Contains(stderr.String(), "Safe to delete") || strings.Contains(stderr.String(), "Review before") || strings.Contains(stderr.String(), "Not safe") {
-		t.Fatalf("expected no severity headings, got %q", stderr.String())
+	if !strings.Contains(errOutput, "2  ! review  beta") ||
+		!strings.Contains(errOutput, "local changes") {
+		t.Fatalf("expected beta with review judgement, got %q", errOutput)
 	}
 	if !strings.Contains(stderr.String(), "Remove alpha? [y/N]") {
 		t.Fatalf("expected simple confirm prompt, got %q", stderr.String())
