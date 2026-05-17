@@ -52,6 +52,9 @@ func TestRunHelperHelpPrintsUsageAndExitsZero(t *testing.T) {
 	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("fzf when available")) {
 		t.Fatalf("expected help to mention auto fzf routing, got %q", got)
 	}
+	if got := stdout.String(); !strings.Contains(got, "[IDLE] temporary = clean detached worktree with no commits beyond the base branch") {
+		t.Fatalf("expected help to explain idle temporary worktrees, got %q", got)
+	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
 	}

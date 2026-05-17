@@ -1700,6 +1700,7 @@ func printHelperHelp(out io.Writer) {
 	fmt.Fprintln(out, "gc evaluates explicit cleanup rules and prints matched worktrees.")
 	fmt.Fprintln(out, "rm removes one worktree.")
 	fmt.Fprintln(out, "rm --cleanup removes clearly safe worktrees.")
+	fmt.Fprintln(out, "[IDLE] temporary = clean detached worktree with no commits beyond the base branch.")
 	fmt.Fprintln(out, "version prints the binary and protocol version. Pass --json for the envelope form.")
 	fmt.Fprintln(out, "help prints this command summary.")
 }
