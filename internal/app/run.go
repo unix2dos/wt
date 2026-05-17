@@ -563,7 +563,7 @@ func listDetachedPresentation(ctx context.Context, deps Deps, item worktree.Work
 
 	hasLocalChanges := item.IsDirty || item.Staged+item.Unstaged+item.Untracked > 0
 	if uniqueCommits == 0 {
-		presentation := detachedListPresentation{branch: "scratch", status: "[IDLE]"}
+		presentation := detachedListPresentation{branch: "temporary", status: "[IDLE]"}
 		if hasLocalChanges {
 			presentation.status = ""
 			presentation.detail = "local changes"
@@ -852,7 +852,7 @@ type removalCandidate struct {
 	item        worktree.Worktree
 	displayItem worktree.Worktree
 	preview     git.RemovalPreview
-	idleScratch bool
+	idleTemporary bool
 }
 
 func newRemovalCandidate(ctx context.Context, deps Deps, item worktree.Worktree, preview git.RemovalPreview, baseBranch string) removalCandidate {
@@ -863,7 +863,7 @@ func newRemovalCandidate(ctx context.Context, deps Deps, item worktree.Worktree,
 	}
 	if detached, ok := listDetachedPresentation(ctx, deps, item, baseBranch); ok {
 		candidate.displayItem = worktreeWithDetachedPresentation(item, detached)
-		candidate.idleScratch = detached.branch == "scratch" && detached.status == "[IDLE]" && !preview.Dirty
+		candidate.idleTemporary = detached.branch == "temporary" && detached.status == "[IDLE]" && !preview.Dirty
 		if preview.Dirty {
 			candidate.displayItem.StatusLabel = ""
 		}
@@ -1290,7 +1290,7 @@ func runRemoveCleanup(ctx context.Context, in io.Reader, out io.Writer, errOut i
 		switch {
 		case preview.Dirty:
 			blockedCount++
-		case candidate.idleScratch:
+		case candidate.idleTemporary:
 			safe = append(safe, cleanupCandidate{removalCandidate: candidate})
 		case item.BranchRef != "" && item.BranchLabel != baseBranch && preview.BranchMerged:
 			subject, _ := deps.LastCommitSubject(ctx, item.Path)
@@ -1316,7 +1316,7 @@ func runRemoveCleanup(ctx context.Context, in io.Reader, out io.Writer, errOut i
 	fmt.Fprintln(errOut)
 	for i, candidate := range safe {
 		fmt.Fprintf(errOut, "%d. %s", i+1, ui.Bold(removalCandidateLabel(candidate.displayItem)))
-		if candidate.idleScratch {
+		if candidate.idleTemporary {
 			fmt.Fprintf(errOut, "  %s", ui.Dim(listDisplayPath(candidate.displayItem.Path, displayRoot)))
 		}
 		fmt.Fprintln(errOut)
@@ -1392,7 +1392,7 @@ func renderRemovalCandidates(w io.Writer, candidates []removalCandidate, display
 	for i, c := range candidates {
 		label := removalCandidateLabel(c.displayItem)
 		status, reason := removalCandidateJudgement(c)
-		if c.idleScratch {
+		if c.idleTemporary {
 			label += "  " + ui.Dim(listDisplayPath(c.displayItem.Path, displayRoot))
 		}
 		fmt.Fprintf(w, "  %d  %s  %s  %s\n", i+1, status, label, reason)
@@ -1404,7 +1404,7 @@ func removalCandidateJudgement(candidate removalCandidate) (string, string) {
 	switch {
 	case preview.Dirty:
 		return ui.Yellow("! review"), ui.Dim("local changes")
-	case candidate.idleScratch:
+	case candidate.idleTemporary:
 		return ui.Green("✓ safe  "), ui.Dim("clean + idle")
 	case candidate.item.BranchRef == "":
 		return ui.Yellow("! review"), ui.Dim("no branch")
