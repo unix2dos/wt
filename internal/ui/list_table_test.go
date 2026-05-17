@@ -11,6 +11,7 @@ func TestFormatListTableUsesUnicodeBoxBorders(t *testing.T) {
 	got := FormatListTable([]ListTableEntry{
 		{Worktree: worktree.Worktree{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true, Staged: 2, Unstaged: 1}},
 		{Worktree: worktree.Worktree{Index: 2, BranchLabel: "feat-a", Path: "/repo/.worktrees/feat-a", IsMerged: true}},
+		{Worktree: worktree.Worktree{Index: 3, BranchLabel: "feat-b", Path: "/repo/.worktrees/feat-b", Ahead: 1}},
 	})
 
 	stripped := StripAnsi(got)
@@ -31,6 +32,68 @@ func TestFormatListTableUsesUnicodeBoxBorders(t *testing.T) {
 	} {
 		if !strings.Contains(stripped, fragment) {
 			t.Fatalf("expected %q in table output, got %q", fragment, stripped)
+		}
+	}
+}
+
+func TestFormatListTableOmitsEmptyOptionalColumns(t *testing.T) {
+	got := FormatListTable([]ListTableEntry{
+		{Worktree: worktree.Worktree{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true}},
+		{Worktree: worktree.Worktree{Index: 2, BranchLabel: "scratch", Path: "/repo/.worktrees/scratch"}, Detail: "idle"},
+	})
+
+	stripped := StripAnsi(got)
+	for _, unexpected := range []string{"AHEAD/BEHIND", "CHANGES"} {
+		if strings.Contains(stripped, unexpected) {
+			t.Fatalf("expected compact table to omit %q, got %q", unexpected, stripped)
+		}
+	}
+	for _, want := range []string{"│ INDEX", "│ STATUS", "│ BRANCH", "│ PATH", "scratch", "idle"} {
+		if !strings.Contains(stripped, want) {
+			t.Fatalf("expected %q in compact table, got %q", want, stripped)
+		}
+	}
+}
+
+func TestFormatListTableShowsAheadBehindColumnWhenNeeded(t *testing.T) {
+	got := FormatListTable([]ListTableEntry{
+		{Worktree: worktree.Worktree{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true}},
+		{Worktree: worktree.Worktree{Index: 2, BranchLabel: "feat-a", Path: "/repo/.worktrees/feat-a", Ahead: 1, Behind: 2}},
+	})
+
+	stripped := StripAnsi(got)
+	if !strings.Contains(stripped, "AHEAD/BEHIND") || !strings.Contains(stripped, "↑1 ↓2") {
+		t.Fatalf("expected ahead/behind column when needed, got %q", stripped)
+	}
+	if strings.Contains(stripped, "CHANGES") {
+		t.Fatalf("expected changes column to stay hidden when empty, got %q", stripped)
+	}
+}
+
+func TestFormatListTableShowsChangesColumnWhenNeeded(t *testing.T) {
+	got := FormatListTable([]ListTableEntry{
+		{Worktree: worktree.Worktree{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true}},
+		{Worktree: worktree.Worktree{Index: 2, BranchLabel: "feat-a", Path: "/repo/.worktrees/feat-a", Unstaged: 1}},
+	})
+
+	stripped := StripAnsi(got)
+	if !strings.Contains(stripped, "CHANGES") || !strings.Contains(stripped, "~1") {
+		t.Fatalf("expected changes column when needed, got %q", stripped)
+	}
+	if strings.Contains(stripped, "AHEAD/BEHIND") {
+		t.Fatalf("expected ahead/behind column to stay hidden when empty, got %q", stripped)
+	}
+}
+
+func TestFormatListTableVerboseKeepsOptionalColumns(t *testing.T) {
+	got := FormatListTableWithOptions([]ListTableEntry{
+		{Worktree: worktree.Worktree{Index: 1, BranchLabel: "main", Path: "/repo", IsCurrent: true}},
+	}, ListTableOptions{ShowEmptyOptionalColumns: true})
+
+	stripped := StripAnsi(got)
+	for _, want := range []string{"AHEAD/BEHIND", "CHANGES"} {
+		if !strings.Contains(stripped, want) {
+			t.Fatalf("expected verbose table to keep %q, got %q", want, stripped)
 		}
 	}
 }
