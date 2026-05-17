@@ -15,6 +15,9 @@ func StatusTags(item worktree.Worktree) []string {
 	if item.IsMerged {
 		tags = append(tags, "[MERGED]")
 	}
+	if item.StatusLabel != "" {
+		tags = append(tags, item.StatusLabel)
+	}
 	return tags
 }
 

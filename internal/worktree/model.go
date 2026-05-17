@@ -4,6 +4,7 @@ type Worktree struct {
 	Path        string
 	BranchRef   string
 	BranchLabel string
+	StatusLabel string
 	IsDetached  bool
 	IsCurrent   bool
 	IsDirty     bool
