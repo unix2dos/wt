@@ -1016,7 +1016,7 @@ func TestRunListShowsDetachedActionableDetails(t *testing.T) {
 	out := ui.StripAnsi(stdout.String())
 	for _, want := range []string{
 		"[IDLE]",
-		"scratch",
+		"temporary",
 		"local changes",
 		"unbranched",
 		"2 commits",
@@ -1030,7 +1030,7 @@ func TestRunListShowsDetachedActionableDetails(t *testing.T) {
 	}
 	for _, unexpected := range []string{
 		"(detached)",
-		"idle scratch",
+		"idle temporary",
 		"has local changes",
 		"unbranched commit",
 		"Merge pull request #15",
@@ -1041,8 +1041,8 @@ func TestRunListShowsDetachedActionableDetails(t *testing.T) {
 		}
 	}
 	for _, line := range strings.Split(out, "\n") {
-		if strings.Contains(line, ".worktrees/idle") && (!strings.Contains(line, "[IDLE]") || !strings.Contains(line, "scratch")) {
-			t.Fatalf("expected idle scratch to stay on one status row, got line %q in %q", line, out)
+		if strings.Contains(line, ".worktrees/idle") && (!strings.Contains(line, "[IDLE]") || !strings.Contains(line, "temporary")) {
+			t.Fatalf("expected idle temporary to stay on one status row, got line %q in %q", line, out)
 		}
 		if strings.Contains(line, "│ idle") && !strings.Contains(line, "[IDLE]") {
 			t.Fatalf("expected idle not to render as branch detail, got line %q in %q", line, out)
@@ -1630,7 +1630,7 @@ func TestRunSwitchPathInteractiveSelectionPrefersFzfWhenAvailable(t *testing.T) 
 	}
 }
 
-func TestRunSwitchPathInteractiveSelectionShowsIdleDetachedScratch(t *testing.T) {
+func TestRunSwitchPathInteractiveSelectionShowsIdleDetachedTemporary(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	var fzfItems []worktree.Worktree
@@ -1646,7 +1646,7 @@ func TestRunSwitchPathInteractiveSelectionShowsIdleDetachedScratch(t *testing.T)
 		detachedUniqueCommits: map[string]int{
 			"/repo/.worktrees/scratch": 0,
 		},
-		fzfSelected: worktree.Worktree{Path: "/repo/.worktrees/scratch", BranchLabel: "scratch", IsDetached: true},
+		fzfSelected: worktree.Worktree{Path: "/repo/.worktrees/scratch", BranchLabel: "temporary", IsDetached: true},
 	}
 
 	code := Run(context.Background(), nil, strings.NewReader(""), stdout, stderr, deps)
@@ -1664,8 +1664,8 @@ func TestRunSwitchPathInteractiveSelectionShowsIdleDetachedScratch(t *testing.T)
 			break
 		}
 	}
-	if scratchItem.BranchLabel != "scratch" || scratchItem.StatusLabel != "[IDLE]" {
-		t.Fatalf("expected idle detached item to be presented as [IDLE] scratch, got %#v from %#v", scratchItem, fzfItems)
+	if scratchItem.BranchLabel != "temporary" || scratchItem.StatusLabel != "[IDLE]" {
+		t.Fatalf("expected idle detached item to be presented as [IDLE] temporary, got %#v from %#v", scratchItem, fzfItems)
 	}
 	if stdout.String() != "/repo/.worktrees/scratch\n" {
 		t.Fatalf("expected selected path on stdout, got %q", stdout.String())
@@ -1840,7 +1840,7 @@ func TestRunRmCleanupShowsSafeNamesReasonAndCommitSubjects(t *testing.T) {
 	}
 }
 
-func TestRunRmCleanupDeletesIdleDetachedScratchWorktrees(t *testing.T) {
+func TestRunRmCleanupDeletesIdleDetachedTemporaryWorktrees(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	removedCalls := []removeCall{}
@@ -1881,7 +1881,7 @@ func TestRunRmCleanupDeletesIdleDetachedScratchWorktrees(t *testing.T) {
 	plainPrompt := ui.StripAnsi(stderr.String())
 	for _, want := range []string{
 		"1 worktree is safe to delete.",
-		"[IDLE] scratch",
+		"[IDLE] temporary",
 		".worktrees/scratch",
 		"1 worktree needs review.",
 		"1 worktree is blocked.",
@@ -1899,12 +1899,12 @@ func TestRunRmCleanupDeletesIdleDetachedScratchWorktrees(t *testing.T) {
 	if len(removedCalls) != 1 {
 		t.Fatalf("expected one removed worktree, got %#v", removedCalls)
 	}
-	if removedCalls[0].item.Path != "/repo/.worktrees/scratch" || removedCalls[0].item.BranchLabel != "scratch" {
+	if removedCalls[0].item.Path != "/repo/.worktrees/scratch" || removedCalls[0].item.BranchLabel != "temporary" {
 		t.Fatalf("expected scratch removal call, got %#v", removedCalls[0])
 	}
 }
 
-func TestRunRmShowsIdleDetachedScratchPaths(t *testing.T) {
+func TestRunRmShowsIdleDetachedTemporaryPaths(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	deps := fakeDeps{
@@ -1929,7 +1929,7 @@ func TestRunRmShowsIdleDetachedScratchPaths(t *testing.T) {
 	plainPrompt := ui.StripAnsi(stderr.String())
 	for _, want := range []string{
 		"✓ safe",
-		"[IDLE] scratch",
+		"[IDLE] temporary",
 		".worktrees/scratch-a",
 		".worktrees/scratch-b",
 		"clean + idle",
