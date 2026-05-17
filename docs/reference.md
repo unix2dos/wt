@@ -286,7 +286,7 @@ Example:
 Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, and the status column uses the same `[CURRENT]` / `[CURRENT] [DIRTY]` / `[DIRTY]` tags as the interactive selector.
 Long `PATH` values are wrapped inside the `PATH` cell instead of being truncated.
 
-Detached worktrees get a short action hint in the path cell. Clean detached worktrees with no commits of their own show `idle scratch`; dirty ones show `has local changes`; detached worktrees with commits not reachable from the base branch show `N unbranched commits` and their last commit subject. Idle detached worktrees do not show a last commit because it is usually just the base commit, not task context.
+Detached worktrees use plain human labels in `ww list`: clean worktrees with no commits of their own show branch `scratch` with detail `idle`; dirty scratch worktrees show `local changes`; detached worktrees with commits not reachable from the base branch show branch `unbranched`, the number of commits, and their last commit subject. Idle scratch worktrees do not show a last commit because it is usually just the base commit, not task context.
 
 `--verbose` appends extra metadata such as stored workspace context and timestamps to the human-readable output.
 
