@@ -286,7 +286,7 @@ Example:
 Worktrees are shown from oldest to newest by worktree creation time. Smaller indices refer to older worktrees, and the status column uses the same `[CURRENT]` / `[CURRENT] [DIRTY]` / `[DIRTY]` tags as the interactive selector.
 Long `PATH` values are wrapped inside the `PATH` cell instead of being truncated.
 
-Detached worktrees get a short action hint in the path cell. Clean detached worktrees with no commits of their own show `idle scratch`; dirty ones show `has local changes`; detached worktrees with commits not reachable from the base branch show `N unbranched commits` and their last commit subject. Idle detached worktrees do not show a last commit because it is usually just the base commit, not task context.
+Detached worktrees use plain human labels in `ww list`: clean worktrees with no commits of their own show branch `scratch` with detail `idle`; dirty scratch worktrees show `local changes`; detached worktrees with commits not reachable from the base branch show branch `unbranched`, the number of commits, and their last commit subject. Idle scratch worktrees do not show a last commit because it is usually just the base commit, not task context.
 
 `--verbose` appends extra metadata such as stored workspace context and timestamps to the human-readable output.
 
@@ -353,7 +353,7 @@ ww rm --force feat-a
 ww rm --cleanup
 ```
 
-`ww rm` (no target) opens an interactive selector for review-and-remove. With a target, it removes that worktree directly after confirmation. The branch is deleted only when it is already merged into the effective base branch. Dirty worktrees stop before confirmation unless you explicitly rerun with `--force`.
+`ww rm` (no target) opens an interactive selector for review-and-remove. The selector marks clean merged worktrees as `safe` and marks dirty, unmerged, or branchless worktrees as `review` with a short reason. With a target, it removes that worktree directly after confirmation. The branch is deleted only when it is already merged into the effective base branch. Dirty worktrees stop before confirmation unless you explicitly rerun with `--force`.
 
 `ww rm --cleanup` removes all clearly safe worktrees after one confirmation. Safe means clean files, already merged, and not the base branch. The prompt shows numbered names plus each last commit subject, and keeps base-branch, detached, dirty, or unmerged worktrees out of the deletion list.
 

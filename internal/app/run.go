@@ -422,13 +422,14 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 
 	// Human path: keep the existing rendering, including verbose detail and
 	// state-load warnings.
-	_, items, metadata, warn, err := orderedWorktrees(ctx, deps)
+	repoKey, items, metadata, warn, err := orderedWorktrees(ctx, deps)
 	if err != nil {
 		return writeCommandError("list", out, errOut, cfg.json, err)
 	}
 	warnStateIssue(errOut, warn)
 
 	baseBranch := annotateExtendedStatusForList(ctx, deps, items)
+	displayRoot := mainWorktreeRootFromRepoKey(repoKey)
 
 	entries := decorateListEntries(items, metadata)
 	if len(entries) == 0 {
@@ -441,13 +442,11 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 
 	tableEntries := make([]ui.ListTableEntry, 0, len(entries))
 	for _, entry := range entries {
-		detail := listDetail(ctx, deps, entry, cfg.verbose, baseBranch)
-		tableEntries = append(tableEntries, ui.ListTableEntry{
-			Worktree: entry.item,
-			Detail:   detail,
-		})
+		tableEntries = append(tableEntries, listTableEntry(ctx, deps, entry, cfg.verbose, baseBranch, displayRoot))
 	}
-	fmt.Fprintln(out, ui.FormatListTable(tableEntries))
+	fmt.Fprintln(out, ui.FormatListTableWithOptions(tableEntries, ui.ListTableOptions{
+		ShowEmptyOptionalColumns: cfg.verbose,
+	}))
 
 	worktrees := make([]worktree.Worktree, 0, len(entries))
 	for _, entry := range entries {
@@ -466,38 +465,93 @@ func annotateExtendedStatusForList(ctx context.Context, deps Deps, items []workt
 	return baseBranch
 }
 
-func listDetail(ctx context.Context, deps Deps, entry listEntry, verbose bool, baseBranch string) string {
+func listTableEntry(ctx context.Context, deps Deps, entry listEntry, verbose bool, baseBranch string, displayRoot string) ui.ListTableEntry {
+	item := entry.item
+	if !verbose {
+		item.Path = listDisplayPath(item.Path, displayRoot)
+	}
 	parts := make([]string, 0, 2)
-	if detached := listDetachedDetail(ctx, deps, entry.item, baseBranch); detached != "" {
-		parts = append(parts, detached)
+	if detached, ok := listDetachedPresentation(ctx, deps, entry.item, baseBranch); ok {
+		item.BranchLabel = detached.branch
+		if detached.detail != "" {
+			parts = append(parts, detached.detail)
+		}
 	}
 	if verboseDetail := listVerboseDetail(ctx, deps, entry, verbose); verboseDetail != "" {
 		parts = append(parts, verboseDetail)
 	}
-	return strings.Join(parts, "\n")
+	return ui.ListTableEntry{
+		Worktree: item,
+		Detail:   strings.Join(parts, "\n"),
+	}
 }
 
-func listDetachedDetail(ctx context.Context, deps Deps, item worktree.Worktree, baseBranch string) string {
-	if !item.IsDetached || baseBranch == "" {
+func listDisplayPath(path string, displayRoot string) string {
+	if path == "" {
 		return ""
+	}
+
+	cleanPath := filepath.Clean(path)
+	if displayRoot != "" {
+		if rel, ok := relativePathWithin(filepath.Clean(displayRoot), cleanPath); ok {
+			return rel
+		}
+	}
+
+	home, err := os.UserHomeDir()
+	if err == nil && home != "" {
+		if rel, ok := relativePathWithin(filepath.Clean(home), cleanPath); ok {
+			if rel == "." {
+				return "~"
+			}
+			return filepath.Join("~", rel)
+		}
+	}
+
+	return path
+}
+
+func relativePathWithin(root string, path string) (string, bool) {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return "", false
+	}
+	if rel == "." {
+		return ".", true
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", false
+	}
+	return rel, true
+}
+
+type detachedListPresentation struct {
+	branch string
+	detail string
+}
+
+func listDetachedPresentation(ctx context.Context, deps Deps, item worktree.Worktree, baseBranch string) (detachedListPresentation, bool) {
+	if !item.IsDetached || baseBranch == "" {
+		return detachedListPresentation{}, false
 	}
 
 	uniqueCommits, err := deps.DetachedUniqueCommits(ctx, item.Path, baseBranch)
 	if err != nil {
-		return ""
+		return detachedListPresentation{}, false
 	}
 
 	hasLocalChanges := item.IsDirty || item.Staged+item.Unstaged+item.Untracked > 0
 	if uniqueCommits == 0 {
+		presentation := detachedListPresentation{branch: "scratch", detail: "idle"}
 		if hasLocalChanges {
-			return "has local changes"
+			presentation.detail = "local changes"
 		}
-		return "idle scratch"
+		return presentation, true
 	}
 
-	summary := fmt.Sprintf("%d unbranched commits", uniqueCommits)
+	summary := fmt.Sprintf("%d commits", uniqueCommits)
 	if uniqueCommits == 1 {
-		summary = "1 unbranched commit"
+		summary = "1 commit"
 	}
 	if hasLocalChanges {
 		summary += " + local changes"
@@ -505,9 +559,9 @@ func listDetachedDetail(ctx context.Context, deps Deps, item worktree.Worktree, 
 
 	subject, err := deps.LastCommitSubject(ctx, item.Path)
 	if err != nil || subject == "" {
-		return summary
+		return detachedListPresentation{branch: "unbranched", detail: summary}, true
 	}
-	return summary + "\nlast commit: " + subject
+	return detachedListPresentation{branch: "unbranched", detail: summary + "\nlast commit: " + subject}, true
 }
 
 func listVerboseDetail(ctx context.Context, deps Deps, entry listEntry, verbose bool) string {
@@ -1286,19 +1340,26 @@ func cleanupDeletePrompt(n int) string {
 func renderRemovalCandidates(w io.Writer, candidates []removalCandidate) {
 	fmt.Fprintln(w, "Remove which worktree?")
 	fmt.Fprintln(w)
-	hasDirty := false
 	for i, c := range candidates {
 		label := removalCandidateLabel(c.item)
-		if c.preview.Dirty {
-			fmt.Fprintf(w, "  %d  %s  ●\n", i+1, label)
-			hasDirty = true
-		} else {
-			fmt.Fprintf(w, "  %d  %s\n", i+1, label)
-		}
+		status, reason := removalCandidateJudgement(c)
+		fmt.Fprintf(w, "  %d  %s  %s  %s\n", i+1, status, label, reason)
 	}
-	if hasDirty {
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, "● uncommitted changes")
+}
+
+func removalCandidateJudgement(candidate removalCandidate) (string, string) {
+	preview := candidate.preview
+	switch {
+	case preview.Dirty:
+		return ui.Yellow("! review"), ui.Dim("local changes")
+	case candidate.item.BranchRef == "":
+		return ui.Yellow("! review"), ui.Dim("no branch")
+	case preview.DeleteBranch:
+		return ui.Green("✓ safe  "), ui.Dim("clean + merged")
+	case !preview.BranchMerged:
+		return ui.Yellow("! review"), ui.Dim("not merged")
+	default:
+		return ui.Yellow("! review"), ui.Dim("branch kept")
 	}
 }
 

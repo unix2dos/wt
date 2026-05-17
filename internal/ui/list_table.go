@@ -19,35 +19,68 @@ type ListTableEntry struct {
 	Detail   string
 }
 
+type ListTableOptions struct {
+	ShowEmptyOptionalColumns bool
+}
+
 func FormatListTable(entries []ListTableEntry) string {
+	return FormatListTableWithOptions(entries, ListTableOptions{})
+}
+
+func FormatListTableWithOptions(entries []ListTableEntry, opts ListTableOptions) string {
 	if len(entries) == 0 {
 		return ""
 	}
 
 	branchWidth := listBranchWidth(entries)
+	columns := listTableColumnsFor(entries, opts)
 	var buf strings.Builder
 
-	buf.WriteString(listTableBorder("┌", "┬", "┐", branchWidth))
+	buf.WriteString(listTableBorder("┌", "┬", "┐", branchWidth, columns))
 	buf.WriteByte('\n')
-	buf.WriteString(listTableRow(humanIndexHeader, humanStatusHeader, humanBranchHeader, listABHeader, listChangesHeader, humanPathHeader, branchWidth))
+	buf.WriteString(listTableRow(humanIndexHeader, humanStatusHeader, humanBranchHeader, listABHeader, listChangesHeader, humanPathHeader, branchWidth, columns))
 	buf.WriteByte('\n')
-	buf.WriteString(listTableBorder("├", "┼", "┤", branchWidth))
+	buf.WriteString(listTableBorder("├", "┼", "┤", branchWidth, columns))
 	buf.WriteByte('\n')
 
 	for i, entry := range entries {
-		for _, row := range listTableRows(entry, branchWidth) {
+		for _, row := range listTableRows(entry, branchWidth, columns) {
 			buf.WriteString(row)
 			buf.WriteByte('\n')
 		}
 		if i == len(entries)-1 {
-			buf.WriteString(listTableBorder("└", "┴", "┘", branchWidth))
+			buf.WriteString(listTableBorder("└", "┴", "┘", branchWidth, columns))
 		} else {
-			buf.WriteString(listTableBorder("├", "┼", "┤", branchWidth))
+			buf.WriteString(listTableBorder("├", "┼", "┤", branchWidth, columns))
 			buf.WriteByte('\n')
 		}
 	}
 
 	return buf.String()
+}
+
+type listTableColumns struct {
+	aheadBehind bool
+	changes     bool
+}
+
+func listTableColumnsFor(entries []ListTableEntry, opts ListTableOptions) listTableColumns {
+	columns := listTableColumns{}
+	if opts.ShowEmptyOptionalColumns {
+		columns.aheadBehind = true
+		columns.changes = true
+		return columns
+	}
+
+	for _, entry := range entries {
+		if FormatWorktreeAheadBehind(entry.Worktree) != "" {
+			columns.aheadBehind = true
+		}
+		if FormatFileChanges(entry.Worktree.Staged, entry.Worktree.Unstaged, entry.Worktree.Untracked) != "" {
+			columns.changes = true
+		}
+	}
+	return columns
 }
 
 func listBranchWidth(entries []ListTableEntry) int {
@@ -66,7 +99,7 @@ func listBranchWidth(entries []ListTableEntry) int {
 	return width
 }
 
-func listTableRows(entry ListTableEntry, branchWidth int) []string {
+func listTableRows(entry ListTableEntry, branchWidth int, columns listTableColumns) []string {
 	branchContent := entry.Worktree.BranchLabel
 	if entry.Detail != "" {
 		branchContent += "\n" + entry.Detail
@@ -89,7 +122,7 @@ func listTableRows(entry ListTableEntry, branchWidth int) []string {
 		}
 		branch := lineAt(branchLines, i)
 		pathLine := lineAt(pathLines, i)
-		rows = append(rows, listTableRow(index, status, branch, ab, changes, pathLine, branchWidth))
+		rows = append(rows, listTableRow(index, status, branch, ab, changes, pathLine, branchWidth, columns))
 	}
 	return rows
 }
@@ -101,26 +134,37 @@ func lineAt(lines []string, index int) string {
 	return lines[index]
 }
 
-func listTableRow(index, status, branch, ab, changes, path string, branchWidth int) string {
-	return fmt.Sprintf("│ %-*s │ %-*s │ %-*s │ %s │ %s │ %-*s │",
-		listIndexWidth, index,
-		humanStatusWidth, status,
-		branchWidth, branch,
-		PadRight(ab, listABWidth),
-		PadRight(changes, listChangesWidth),
-		listPathWidth, path,
-	)
+func listTableRow(index, status, branch, ab, changes, path string, branchWidth int, columns listTableColumns) string {
+	cells := []string{
+		fmt.Sprintf("%-*s", listIndexWidth, index),
+		fmt.Sprintf("%-*s", humanStatusWidth, status),
+		fmt.Sprintf("%-*s", branchWidth, branch),
+	}
+	if columns.aheadBehind {
+		cells = append(cells, PadRight(ab, listABWidth))
+	}
+	if columns.changes {
+		cells = append(cells, PadRight(changes, listChangesWidth))
+	}
+	cells = append(cells, fmt.Sprintf("%-*s", listPathWidth, path))
+	return "│ " + strings.Join(cells, " │ ") + " │"
 }
 
-func listTableBorder(left, mid, right string, branchWidth int) string {
-	return left +
-		strings.Repeat("─", listIndexWidth+2) + mid +
-		strings.Repeat("─", humanStatusWidth+2) + mid +
-		strings.Repeat("─", branchWidth+2) + mid +
-		strings.Repeat("─", listABWidth+2) + mid +
-		strings.Repeat("─", listChangesWidth+2) + mid +
-		strings.Repeat("─", listPathWidth+2) +
-		right
+func listTableBorder(left, mid, right string, branchWidth int, columns listTableColumns) string {
+	widths := []int{listIndexWidth, humanStatusWidth, branchWidth}
+	if columns.aheadBehind {
+		widths = append(widths, listABWidth)
+	}
+	if columns.changes {
+		widths = append(widths, listChangesWidth)
+	}
+	widths = append(widths, listPathWidth)
+
+	segments := make([]string, 0, len(widths))
+	for _, width := range widths {
+		segments = append(segments, strings.Repeat("─", width+2))
+	}
+	return left + strings.Join(segments, mid) + right
 }
 
 func wrapCell(text string, width int) []string {
