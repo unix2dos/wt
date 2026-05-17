@@ -1630,6 +1630,48 @@ func TestRunSwitchPathInteractiveSelectionPrefersFzfWhenAvailable(t *testing.T) 
 	}
 }
 
+func TestRunSwitchPathInteractiveSelectionShowsIdleDetachedScratch(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	var fzfItems []worktree.Worktree
+	deps := fakeDeps{
+		repoKey:       "/repo/.git",
+		defaultBranch: "main",
+		touched:       &touchRecord{},
+		fzfItems:      &fzfItems,
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", BranchRef: "refs/heads/main", IsCurrent: true},
+			{Path: "/repo/.worktrees/scratch", BranchLabel: "(detached)", IsDetached: true},
+		},
+		detachedUniqueCommits: map[string]int{
+			"/repo/.worktrees/scratch": 0,
+		},
+		fzfSelected: worktree.Worktree{Path: "/repo/.worktrees/scratch", BranchLabel: "scratch", IsDetached: true},
+	}
+
+	code := Run(context.Background(), nil, strings.NewReader(""), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if len(fzfItems) != 2 {
+		t.Fatalf("expected fzf items to be captured, got %#v", fzfItems)
+	}
+	var scratchItem worktree.Worktree
+	for _, item := range fzfItems {
+		if item.Path == "/repo/.worktrees/scratch" {
+			scratchItem = item
+			break
+		}
+	}
+	if scratchItem.BranchLabel != "scratch" || scratchItem.StatusLabel != "[IDLE]" {
+		t.Fatalf("expected idle detached item to be presented as [IDLE] scratch, got %#v from %#v", scratchItem, fzfItems)
+	}
+	if stdout.String() != "/repo/.worktrees/scratch\n" {
+		t.Fatalf("expected selected path on stdout, got %q", stdout.String())
+	}
+}
+
 func TestRunSwitchPathInteractiveSelectionFallsBackToTUIWhenFzfMissing(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -1741,6 +1783,9 @@ func TestRunRmCleanupShowsSafeNamesReasonAndCommitSubjects(t *testing.T) {
 			"/repo/.worktrees/alpha": "Add alpha feature",
 			"/repo/.worktrees/beta":  "Fix beta behavior",
 		},
+		detachedUniqueCommits: map[string]int{
+			"/repo/.worktrees/detached": 2,
+		},
 	}
 
 	code := Run(context.Background(), []string{"rm", "--cleanup"}, strings.NewReader("y\n"), stdout, stderr, deps)
@@ -1752,7 +1797,7 @@ func TestRunRmCleanupShowsSafeNamesReasonAndCommitSubjects(t *testing.T) {
 	plainPrompt := ui.StripAnsi(gotPrompt)
 	for _, want := range []string{
 		"2 worktrees are safe to delete.",
-		"Safe because: clean files, already merged, not the base branch.",
+		"Safe because: clean files and no work that needs preserving.",
 		"1. alpha",
 		"   last commit: Add alpha feature",
 		"2. beta",
@@ -1768,7 +1813,7 @@ func TestRunRmCleanupShowsSafeNamesReasonAndCommitSubjects(t *testing.T) {
 	}
 	for _, want := range []string{
 		ui.Green("2 worktrees are safe to delete."),
-		ui.Dim("Safe because: clean files, already merged, not the base branch."),
+		ui.Dim("Safe because: clean files and no work that needs preserving."),
 		ui.Bold("alpha"),
 		ui.Dim("   last commit: Add alpha feature"),
 		ui.Yellow("1 worktree needs review."),
@@ -1792,6 +1837,109 @@ func TestRunRmCleanupShowsSafeNamesReasonAndCommitSubjects(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "Removed alpha") || !strings.Contains(stdout.String(), "Removed beta") {
 		t.Fatalf("expected removal output for alpha and beta, got %q", stdout.String())
+	}
+}
+
+func TestRunRmCleanupDeletesIdleDetachedScratchWorktrees(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	removedCalls := []removeCall{}
+	deps := fakeDeps{
+		repoKey:       "/repo/.git",
+		defaultBranch: "main",
+		removedCalls:  &removedCalls,
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", BranchRef: "refs/heads/main", IsCurrent: true},
+			{Path: "/repo/.worktrees/scratch", BranchLabel: "(detached)", IsDetached: true},
+			{Path: "/repo/.worktrees/unbranched", BranchLabel: "(detached)", IsDetached: true},
+			{Path: "/repo/.worktrees/dirty", BranchLabel: "(detached)", IsDetached: true},
+		},
+		previews: map[string]git.RemovalPreview{
+			"/repo/.worktrees/scratch": {
+				Worktree: worktree.Worktree{Path: "/repo/.worktrees/scratch", BranchLabel: "(detached)", IsDetached: true},
+			},
+			"/repo/.worktrees/unbranched": {
+				Worktree: worktree.Worktree{Path: "/repo/.worktrees/unbranched", BranchLabel: "(detached)", IsDetached: true},
+			},
+			"/repo/.worktrees/dirty": {
+				Worktree: worktree.Worktree{Path: "/repo/.worktrees/dirty", BranchLabel: "(detached)", IsDetached: true},
+				Dirty:    true,
+			},
+		},
+		detachedUniqueCommits: map[string]int{
+			"/repo/.worktrees/scratch":    0,
+			"/repo/.worktrees/unbranched": 2,
+			"/repo/.worktrees/dirty":      0,
+		},
+	}
+
+	code := Run(context.Background(), []string{"rm", "--cleanup"}, strings.NewReader("y\n"), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	plainPrompt := ui.StripAnsi(stderr.String())
+	for _, want := range []string{
+		"1 worktree is safe to delete.",
+		"[IDLE] scratch",
+		".worktrees/scratch",
+		"1 worktree needs review.",
+		"1 worktree is blocked.",
+		"Delete this worktree? [y/N]",
+	} {
+		if !strings.Contains(plainPrompt, want) {
+			t.Fatalf("expected cleanup prompt to contain %q, got %q", want, plainPrompt)
+		}
+	}
+	for _, unexpected := range []string{".worktrees/unbranched", ".worktrees/dirty"} {
+		if strings.Contains(plainPrompt, unexpected) {
+			t.Fatalf("expected cleanup prompt to hide review/blocked path %q, got %q", unexpected, plainPrompt)
+		}
+	}
+	if len(removedCalls) != 1 {
+		t.Fatalf("expected one removed worktree, got %#v", removedCalls)
+	}
+	if removedCalls[0].item.Path != "/repo/.worktrees/scratch" || removedCalls[0].item.BranchLabel != "scratch" {
+		t.Fatalf("expected scratch removal call, got %#v", removedCalls[0])
+	}
+}
+
+func TestRunRmShowsIdleDetachedScratchPaths(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		repoKey:       "/repo/.git",
+		defaultBranch: "main",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", BranchRef: "refs/heads/main", IsCurrent: true},
+			{Path: "/repo/.worktrees/scratch-a", BranchLabel: "(detached)", IsDetached: true},
+			{Path: "/repo/.worktrees/scratch-b", BranchLabel: "(detached)", IsDetached: true},
+		},
+		detachedUniqueCommits: map[string]int{
+			"/repo/.worktrees/scratch-a": 0,
+			"/repo/.worktrees/scratch-b": 0,
+		},
+	}
+
+	code := Run(context.Background(), []string{"rm"}, strings.NewReader("1\nn\n"), stdout, stderr, deps)
+
+	if code != 130 {
+		t.Fatalf("expected cancelled exit code 130, got %d", code)
+	}
+	plainPrompt := ui.StripAnsi(stderr.String())
+	for _, want := range []string{
+		"✓ safe",
+		"[IDLE] scratch",
+		".worktrees/scratch-a",
+		".worktrees/scratch-b",
+		"clean + idle",
+	} {
+		if !strings.Contains(plainPrompt, want) {
+			t.Fatalf("expected rm prompt to contain %q, got %q", want, plainPrompt)
+		}
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout after cancel, got %q", stdout.String())
 	}
 }
 
@@ -1820,6 +1968,9 @@ func TestRunRmCleanupWithNoSafeWorktreesDoesNotPrompt(t *testing.T) {
 				BranchMerged: true,
 				DeleteBranch: true,
 			},
+		},
+		detachedUniqueCommits: map[string]int{
+			"/repo/.worktrees/detached": 1,
 		},
 	}
 
@@ -2527,6 +2678,7 @@ type fakeDeps struct {
 	worktrees             []worktree.Worktree
 	err                   error
 	fzfSelected           worktree.Worktree
+	fzfItems              *[]worktree.Worktree
 	fzfErr                error
 	tuiSelected           worktree.Worktree
 	tuiErr                error
@@ -2609,7 +2761,10 @@ func (f fakeDeps) ListWorktrees(context.Context) (string, []worktree.Worktree, i
 	return f.repoKey, append([]worktree.Worktree(nil), f.worktrees...), 0, nil
 }
 
-func (f fakeDeps) SelectWorktreeWithFzf(context.Context, []worktree.Worktree) (worktree.Worktree, error) {
+func (f fakeDeps) SelectWorktreeWithFzf(_ context.Context, items []worktree.Worktree) (worktree.Worktree, error) {
+	if f.fzfItems != nil {
+		*f.fzfItems = append([]worktree.Worktree(nil), items...)
+	}
 	if f.fzfErr != nil {
 		return worktree.Worktree{}, f.fzfErr
 	}

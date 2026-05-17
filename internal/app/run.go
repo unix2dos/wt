@@ -292,12 +292,21 @@ func runInit(args []string, out io.Writer, errOut io.Writer) int {
 // annotateExtendedStatusBestEffort calls AnnotateExtendedStatus if DefaultBranch
 // can be resolved. Errors are swallowed — if git commands fail, the list shows
 // with basic info only.
-func annotateExtendedStatusBestEffort(ctx context.Context, deps Deps, items []worktree.Worktree) {
+func annotateExtendedStatusBestEffort(ctx context.Context, deps Deps, items []worktree.Worktree) string {
 	baseBranch, err := deps.DefaultBranch(ctx)
 	if err != nil {
-		return
+		return ""
 	}
 	_ = deps.AnnotateExtendedStatus(ctx, items, baseBranch)
+	return baseBranch
+}
+
+func decorateDetachedWorktreesForSelection(ctx context.Context, deps Deps, items []worktree.Worktree, baseBranch string) {
+	for i := range items {
+		if detached, ok := listDetachedPresentation(ctx, deps, items[i], baseBranch); ok {
+			items[i] = worktreeWithDetachedPresentation(items[i], detached)
+		}
+	}
 }
 
 func runSwitchPath(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut io.Writer, deps Deps) int {
@@ -313,7 +322,8 @@ func runSwitchPath(ctx context.Context, args []string, in io.Reader, out io.Writ
 		}
 		warnStateIssue(errOut, warn)
 
-		annotateExtendedStatusBestEffort(ctx, deps, items)
+		baseBranch := annotateExtendedStatusBestEffort(ctx, deps, items)
+		decorateDetachedWorktreesForSelection(ctx, deps, items, baseBranch)
 
 		selected, err := deps.SelectWorktreeWithFzf(ctx, items)
 		if err != nil {
@@ -341,7 +351,8 @@ func runSwitchPath(ctx context.Context, args []string, in io.Reader, out io.Writ
 		}
 		warnStateIssue(errOut, warn)
 
-		annotateExtendedStatusBestEffort(ctx, deps, items)
+		baseBranch := annotateExtendedStatusBestEffort(ctx, deps, items)
+		decorateDetachedWorktreesForSelection(ctx, deps, items, baseBranch)
 
 		selected, err := selectInteractiveWorktree(ctx, in, errOut, items, deps, false)
 		if err != nil {
@@ -473,7 +484,7 @@ func listTableEntry(ctx context.Context, deps Deps, entry listEntry, verbose boo
 	parts := make([]string, 0, 2)
 	status := ""
 	if detached, ok := listDetachedPresentation(ctx, deps, entry.item, baseBranch); ok {
-		item.BranchLabel = detached.branch
+		item = worktreeWithDetachedPresentation(item, detached)
 		status = detached.status
 		if detached.detail != "" {
 			parts = append(parts, detached.detail)
@@ -526,6 +537,12 @@ func relativePathWithin(root string, path string) (string, bool) {
 		return "", false
 	}
 	return rel, true
+}
+
+func worktreeWithDetachedPresentation(item worktree.Worktree, detached detachedListPresentation) worktree.Worktree {
+	item.BranchLabel = detached.branch
+	item.StatusLabel = detached.status
+	return item
 }
 
 type detachedListPresentation struct {
@@ -832,8 +849,26 @@ type removeConfig struct {
 }
 
 type removalCandidate struct {
-	item    worktree.Worktree
-	preview git.RemovalPreview
+	item        worktree.Worktree
+	displayItem worktree.Worktree
+	preview     git.RemovalPreview
+	idleScratch bool
+}
+
+func newRemovalCandidate(ctx context.Context, deps Deps, item worktree.Worktree, preview git.RemovalPreview, baseBranch string) removalCandidate {
+	candidate := removalCandidate{
+		item:        item,
+		displayItem: item,
+		preview:     preview,
+	}
+	if detached, ok := listDetachedPresentation(ctx, deps, item, baseBranch); ok {
+		candidate.displayItem = worktreeWithDetachedPresentation(item, detached)
+		candidate.idleScratch = detached.branch == "scratch" && detached.status == "[IDLE]" && !preview.Dirty
+		if preview.Dirty {
+			candidate.displayItem.StatusLabel = ""
+		}
+	}
+	return candidate
 }
 
 func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut io.Writer, deps Deps) int {
@@ -855,7 +890,7 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 	}
 
 	// Human path keeps the interactive prompt flow.
-	_, items, _, warn, err := orderedWorktrees(ctx, deps)
+	repoKey, items, _, warn, err := orderedWorktrees(ctx, deps)
 	if err != nil {
 		return writeCommandError("rm", out, errOut, cfg.json, err)
 	}
@@ -881,6 +916,7 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 	if err != nil {
 		return writeCommandError("rm", out, errOut, cfg.json, err)
 	}
+	displayRoot := mainWorktreeRootFromRepoKey(repoKey)
 
 	previewed := make([]removalCandidate, 0, len(candidates))
 	for _, item := range candidates {
@@ -888,7 +924,7 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 		if err != nil {
 			return writeCommandError("rm", out, errOut, cfg.json, err)
 		}
-		previewed = append(previewed, removalCandidate{item: item, preview: preview})
+		previewed = append(previewed, newRemovalCandidate(ctx, deps, item, preview, baseBranch))
 	}
 
 	reader := bufio.NewReader(in)
@@ -903,7 +939,7 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 	} else if len(previewed) == 1 {
 		selected = previewed[0]
 	} else {
-		renderRemovalCandidates(errOut, previewed)
+		renderRemovalCandidates(errOut, previewed, displayRoot)
 		index, err := readChoice(reader, errOut, "\n> ", len(previewed), 0)
 		if err != nil {
 			return writeSelectionError(errOut, err)
@@ -911,7 +947,7 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 		selected = previewed[index-1]
 	}
 
-	label := removalCandidateLabel(selected.item)
+	label := removalCandidateLabel(selected.displayItem)
 	if selected.preview.Dirty && !cfg.force {
 		fmt.Fprintf(errOut, "%s has uncommitted changes. Use --force to remove.\n", label)
 		return 1
@@ -931,7 +967,7 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 		return 130
 	}
 
-	result, err := deps.RemoveWorktree(ctx, selected.item, git.RemoveOptions{
+	result, err := deps.RemoveWorktree(ctx, selected.displayItem, git.RemoveOptions{
 		BaseBranch: baseBranch,
 		Force:      cfg.force,
 	})
@@ -1225,7 +1261,7 @@ func matchRemovalCandidate(candidates []removalCandidate, target string) (remova
 }
 
 func runRemoveCleanup(ctx context.Context, in io.Reader, out io.Writer, errOut io.Writer, deps Deps) int {
-	_, items, _, warn, err := orderedWorktrees(ctx, deps)
+	repoKey, items, _, warn, err := orderedWorktrees(ctx, deps)
 	if err != nil {
 		return writeCommandError("rm", out, errOut, false, err)
 	}
@@ -1235,9 +1271,10 @@ func runRemoveCleanup(ctx context.Context, in io.Reader, out io.Writer, errOut i
 	if err != nil {
 		return writeCommandError("rm", out, errOut, false, err)
 	}
+	displayRoot := mainWorktreeRootFromRepoKey(repoKey)
 
 	type cleanupCandidate struct {
-		item          worktree.Worktree
+		removalCandidate
 		commitSubject string
 	}
 
@@ -1249,12 +1286,15 @@ func runRemoveCleanup(ctx context.Context, in io.Reader, out io.Writer, errOut i
 		if err != nil {
 			return writeCommandError("rm", out, errOut, false, err)
 		}
+		candidate := newRemovalCandidate(ctx, deps, item, preview, baseBranch)
 		switch {
 		case preview.Dirty:
 			blockedCount++
+		case candidate.idleScratch:
+			safe = append(safe, cleanupCandidate{removalCandidate: candidate})
 		case item.BranchRef != "" && item.BranchLabel != baseBranch && preview.BranchMerged:
 			subject, _ := deps.LastCommitSubject(ctx, item.Path)
-			safe = append(safe, cleanupCandidate{item: item, commitSubject: subject})
+			safe = append(safe, cleanupCandidate{removalCandidate: candidate, commitSubject: subject})
 		default:
 			reviewCount++
 		}
@@ -1272,10 +1312,14 @@ func runRemoveCleanup(ctx context.Context, in io.Reader, out io.Writer, errOut i
 	}
 
 	fmt.Fprintln(errOut, ui.Green(cleanupSafeToDelete(len(safe))+"."))
-	fmt.Fprintln(errOut, ui.Dim("Safe because: clean files, already merged, not the base branch."))
+	fmt.Fprintln(errOut, ui.Dim("Safe because: clean files and no work that needs preserving."))
 	fmt.Fprintln(errOut)
 	for i, candidate := range safe {
-		fmt.Fprintf(errOut, "%d. %s\n", i+1, ui.Bold(removalCandidateLabel(candidate.item)))
+		fmt.Fprintf(errOut, "%d. %s", i+1, ui.Bold(removalCandidateLabel(candidate.displayItem)))
+		if candidate.idleScratch {
+			fmt.Fprintf(errOut, "  %s", ui.Dim(listDisplayPath(candidate.displayItem.Path, displayRoot)))
+		}
+		fmt.Fprintln(errOut)
 		if candidate.commitSubject != "" {
 			fmt.Fprintln(errOut, ui.Dim(fmt.Sprintf("   last commit: %s", candidate.commitSubject)))
 		}
@@ -1305,7 +1349,7 @@ func runRemoveCleanup(ctx context.Context, in io.Reader, out io.Writer, errOut i
 	}
 
 	for _, candidate := range safe {
-		result, err := deps.RemoveWorktree(ctx, candidate.item, git.RemoveOptions{BaseBranch: baseBranch})
+		result, err := deps.RemoveWorktree(ctx, candidate.displayItem, git.RemoveOptions{BaseBranch: baseBranch})
 		if err != nil {
 			return writeCommandError("rm", out, errOut, false, err)
 		}
@@ -1342,12 +1386,15 @@ func cleanupDeletePrompt(n int) string {
 	return fmt.Sprintf("Delete these %d? [y/N] ", n)
 }
 
-func renderRemovalCandidates(w io.Writer, candidates []removalCandidate) {
+func renderRemovalCandidates(w io.Writer, candidates []removalCandidate, displayRoot string) {
 	fmt.Fprintln(w, "Remove which worktree?")
 	fmt.Fprintln(w)
 	for i, c := range candidates {
-		label := removalCandidateLabel(c.item)
+		label := removalCandidateLabel(c.displayItem)
 		status, reason := removalCandidateJudgement(c)
+		if c.idleScratch {
+			label += "  " + ui.Dim(listDisplayPath(c.displayItem.Path, displayRoot))
+		}
 		fmt.Fprintf(w, "  %d  %s  %s  %s\n", i+1, status, label, reason)
 	}
 }
@@ -1357,6 +1404,8 @@ func removalCandidateJudgement(candidate removalCandidate) (string, string) {
 	switch {
 	case preview.Dirty:
 		return ui.Yellow("! review"), ui.Dim("local changes")
+	case candidate.idleScratch:
+		return ui.Green("✓ safe  "), ui.Dim("clean + idle")
 	case candidate.item.BranchRef == "":
 		return ui.Yellow("! review"), ui.Dim("no branch")
 	case preview.DeleteBranch:
@@ -1369,8 +1418,12 @@ func removalCandidateJudgement(candidate removalCandidate) (string, string) {
 }
 
 func removalCandidateLabel(item worktree.Worktree) string {
-	if strings.TrimSpace(item.BranchLabel) != "" {
-		return item.BranchLabel
+	label := strings.TrimSpace(item.BranchLabel)
+	if label != "" {
+		if item.StatusLabel != "" {
+			return item.StatusLabel + " " + label
+		}
+		return label
 	}
 	return filepath.Base(item.Path)
 }
