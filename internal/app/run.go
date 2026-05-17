@@ -422,13 +422,14 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 
 	// Human path: keep the existing rendering, including verbose detail and
 	// state-load warnings.
-	_, items, metadata, warn, err := orderedWorktrees(ctx, deps)
+	repoKey, items, metadata, warn, err := orderedWorktrees(ctx, deps)
 	if err != nil {
 		return writeCommandError("list", out, errOut, cfg.json, err)
 	}
 	warnStateIssue(errOut, warn)
 
 	baseBranch := annotateExtendedStatusForList(ctx, deps, items)
+	displayRoot := mainWorktreeRootFromRepoKey(repoKey)
 
 	entries := decorateListEntries(items, metadata)
 	if len(entries) == 0 {
@@ -441,7 +442,7 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 
 	tableEntries := make([]ui.ListTableEntry, 0, len(entries))
 	for _, entry := range entries {
-		tableEntries = append(tableEntries, listTableEntry(ctx, deps, entry, cfg.verbose, baseBranch))
+		tableEntries = append(tableEntries, listTableEntry(ctx, deps, entry, cfg.verbose, baseBranch, displayRoot))
 	}
 	fmt.Fprintln(out, ui.FormatListTableWithOptions(tableEntries, ui.ListTableOptions{
 		ShowEmptyOptionalColumns: cfg.verbose,
@@ -464,8 +465,11 @@ func annotateExtendedStatusForList(ctx context.Context, deps Deps, items []workt
 	return baseBranch
 }
 
-func listTableEntry(ctx context.Context, deps Deps, entry listEntry, verbose bool, baseBranch string) ui.ListTableEntry {
+func listTableEntry(ctx context.Context, deps Deps, entry listEntry, verbose bool, baseBranch string, displayRoot string) ui.ListTableEntry {
 	item := entry.item
+	if !verbose {
+		item.Path = listDisplayPath(item.Path, displayRoot)
+	}
 	parts := make([]string, 0, 2)
 	if detached, ok := listDetachedPresentation(ctx, deps, entry.item, baseBranch); ok {
 		item.BranchLabel = detached.branch
@@ -480,6 +484,45 @@ func listTableEntry(ctx context.Context, deps Deps, entry listEntry, verbose boo
 		Worktree: item,
 		Detail:   strings.Join(parts, "\n"),
 	}
+}
+
+func listDisplayPath(path string, displayRoot string) string {
+	if path == "" {
+		return ""
+	}
+
+	cleanPath := filepath.Clean(path)
+	if displayRoot != "" {
+		if rel, ok := relativePathWithin(filepath.Clean(displayRoot), cleanPath); ok {
+			return rel
+		}
+	}
+
+	home, err := os.UserHomeDir()
+	if err == nil && home != "" {
+		if rel, ok := relativePathWithin(filepath.Clean(home), cleanPath); ok {
+			if rel == "." {
+				return "~"
+			}
+			return filepath.Join("~", rel)
+		}
+	}
+
+	return path
+}
+
+func relativePathWithin(root string, path string) (string, bool) {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return "", false
+	}
+	if rel == "." {
+		return ".", true
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", false
+	}
+	return rel, true
 }
 
 type detachedListPresentation struct {

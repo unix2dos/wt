@@ -308,13 +308,13 @@ func TestRunListPrintsMenuWithoutPrompt(t *testing.T) {
 	if !strings.Contains(stdout.String(), "┌") || !strings.Contains(stdout.String(), "┼") || !strings.Contains(stdout.String(), "┘") {
 		t.Fatalf("expected list divider in output, got %q", stdout.String())
 	}
-	if strings.Index(stdout.String(), "│ 1     │ [CURRENT]          │ main") > strings.Index(stdout.String(), "/repo/.worktrees/alpha") {
+	if strings.Index(stdout.String(), "│ 1     │ [CURRENT]          │ main") > strings.Index(stdout.String(), ".worktrees/alpha") {
 		t.Fatalf("expected main before alpha in creation ordering, got %q", stdout.String())
 	}
-	if strings.Index(stdout.String(), "/repo/.worktrees/alpha") > strings.Index(stdout.String(), "/repo/.worktrees/beta") {
+	if strings.Index(stdout.String(), ".worktrees/alpha") > strings.Index(stdout.String(), ".worktrees/beta") {
 		t.Fatalf("expected alpha before beta in creation ordering, got %q", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "│ 1     │ [CURRENT]          │ main") || !strings.Contains(stdout.String(), "│ /repo") {
+	if !strings.Contains(stdout.String(), "│ 1     │ [CURRENT]          │ main") || !strings.Contains(stdout.String(), "│ .") {
 		t.Fatalf("expected CURRENT status in list output, got %q", stdout.String())
 	}
 	if bytes.Contains(stdout.Bytes(), []byte("Select a worktree")) {
@@ -347,10 +347,10 @@ func TestRunListShowsDirtyStatuses(t *testing.T) {
 		t.Fatalf("expected list header in output, got %q", stdout.String())
 	}
 	// Dirty status is now shown via CHANGES column, not STATUS tags
-	if !strings.Contains(stdout.String(), "│ 1     │ [CURRENT]          │ main") || !strings.Contains(stdout.String(), "│ /repo") {
+	if !strings.Contains(stdout.String(), "│ 1     │ [CURRENT]          │ main") || !strings.Contains(stdout.String(), "│ .") {
 		t.Fatalf("expected current status in list output, got %q", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "│ 2     │                    │ alpha") || !strings.Contains(stdout.String(), "/repo/.worktrees/alpha") {
+	if !strings.Contains(stdout.String(), "│ 2     │                    │ alpha") || !strings.Contains(stdout.String(), ".worktrees/alpha") {
 		t.Fatalf("expected alpha row in list output, got %q", stdout.String())
 	}
 	if stderr.Len() != 0 {
@@ -908,13 +908,72 @@ func TestRunListKeepsDefaultOutputFocusedOnWorktrees(t *testing.T) {
 		t.Fatalf("expected list header in output, got %q", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "│ 1     │                    │ alpha") ||
-		!strings.Contains(stdout.String(), "/repo/.worktrees/alpha") ||
+		!strings.Contains(stdout.String(), ".worktrees/alpha") ||
 		!strings.Contains(stdout.String(), "│ 2     │                    │ beta") ||
-		!strings.Contains(stdout.String(), "/repo/.worktrees/beta") {
+		!strings.Contains(stdout.String(), ".worktrees/beta") {
 		t.Fatalf("expected worktree rows in list output, got %q", stdout.String())
 	}
 	if strings.Contains(stdout.String(), "task=") || strings.Contains(stdout.String(), "label=") {
 		t.Fatalf("expected metadata hidden from default list output, got %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
+func TestRunListShortensPathsByDefault(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		repoKey: "/repo/.git",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", IsCurrent: true, CreatedAt: 10},
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", CreatedAt: 20},
+		},
+	}
+
+	code := Run(context.Background(), []string{"list"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	out := ui.StripAnsi(stdout.String())
+	for _, want := range []string{"│ .", ".worktrees/alpha"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected shortened path %q in list output, got %q", want, out)
+		}
+	}
+	for _, unexpected := range []string{"/repo/.worktrees/alpha", "/repo                                            │"} {
+		if strings.Contains(out, unexpected) {
+			t.Fatalf("expected default list to avoid full path %q, got %q", unexpected, out)
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
+func TestRunListVerboseKeepsAbsolutePaths(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	deps := fakeDeps{
+		repoKey: "/repo/.git",
+		worktrees: []worktree.Worktree{
+			{Path: "/repo", BranchLabel: "main", IsCurrent: true, CreatedAt: 10},
+			{Path: "/repo/.worktrees/alpha", BranchLabel: "alpha", CreatedAt: 20},
+		},
+	}
+
+	code := Run(context.Background(), []string{"list", "--verbose"}, bytes.NewReader(nil), stdout, stderr, deps)
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	out := ui.StripAnsi(stdout.String())
+	for _, want := range []string{"/repo", "/repo/.worktrees/alpha"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected verbose list to keep full path %q, got %q", want, out)
+		}
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected no stderr output, got %q", stderr.String())
