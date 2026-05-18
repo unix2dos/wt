@@ -329,6 +329,34 @@ func TestRunListPrintsMenuWithoutPrompt(t *testing.T) {
 	}
 }
 
+func TestRunListHelpPrintsCommandHelp(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := Run(context.Background(), []string{"list", "--help"}, bytes.NewReader(nil), stdout, stderr, fakeDeps{})
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	got := stdout.String()
+	for _, want := range []string{
+		"Usage: ww list [--verbose] [--json]",
+		"Shows worktrees without switching.",
+		"[CURRENT]  current shell worktree",
+		"[MERGED]   branch already merged into the base branch",
+		"[IDLE]     temporary detached worktree with no local work",
+		"temporary  detached worktree with clean files and no commits beyond base",
+		"unbranched detached worktree with commits; review before removing",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected list help to contain %q, got %q", want, got)
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
 func TestRunListShowsDirtyStatuses(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}

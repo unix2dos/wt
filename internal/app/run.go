@@ -406,6 +406,7 @@ func runSwitchPath(ctx context.Context, args []string, in io.Reader, out io.Writ
 type listConfig struct {
 	json    bool
 	verbose bool
+	help    bool
 }
 
 type listEntry struct {
@@ -417,6 +418,10 @@ func runList(ctx context.Context, args []string, out io.Writer, errOut io.Writer
 	cfg, err := parseListArgs(args)
 	if err != nil {
 		return writeCommandError("list", out, errOut, cfg.json, err)
+	}
+	if cfg.help {
+		printListHelp(out)
+		return 0
 	}
 
 	if cfg.json {
@@ -1065,11 +1070,16 @@ func parseListArgs(args []string) (listConfig, error) {
 			cfg.json = true
 		case arg == "--verbose":
 			cfg.verbose = true
+		case arg == "--help" || arg == "-h" || arg == "help":
+			cfg.help = true
 		case strings.HasPrefix(arg, "-"):
 			return cfg, appError{Code: "input.invalid_argument", Message: fmt.Sprintf("unknown option: %s", arg), ExitCode: 2}
 		default:
 			return cfg, appError{Code: "input.invalid_argument", Message: fmt.Sprintf("unexpected extra arguments: %s", strings.Join(args[i:], " ")), ExitCode: 2}
 		}
+	}
+	if cfg.help && (cfg.json || cfg.verbose) {
+		return cfg, appError{Code: "input.invalid_argument", Message: "list help cannot be combined with other arguments", ExitCode: 2}
 	}
 	return cfg, nil
 }
@@ -1714,6 +1724,21 @@ func printHelperHelp(out io.Writer) {
 	fmt.Fprintln(out, "[IDLE] temporary = clean detached worktree with no commits beyond the base branch.")
 	fmt.Fprintln(out, "version prints the binary and protocol version. Pass --json for the envelope form.")
 	fmt.Fprintln(out, "help prints this command summary.")
+}
+
+func printListHelp(out io.Writer) {
+	fmt.Fprintln(out, "Usage: ww list [--verbose] [--json]")
+	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "Shows worktrees without switching.")
+	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "Status:")
+	fmt.Fprintln(out, "  [CURRENT]  current shell worktree")
+	fmt.Fprintln(out, "  [MERGED]   branch already merged into the base branch")
+	fmt.Fprintln(out, "  [IDLE]     temporary detached worktree with no local work")
+	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "Branch:")
+	fmt.Fprintln(out, "  temporary  detached worktree with clean files and no commits beyond base")
+	fmt.Fprintln(out, "  unbranched detached worktree with commits; review before removing")
 }
 
 func printRemoveHelp(out io.Writer) {
