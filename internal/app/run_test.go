@@ -2079,6 +2079,35 @@ func TestRunRmRejectsNonInteractiveFlag(t *testing.T) {
 	}
 }
 
+func TestRunRmHelpPrintsCommandHelp(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	code := Run(context.Background(), []string{"rm", "--help"}, strings.NewReader(""), stdout, stderr, fakeDeps{})
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	got := stdout.String()
+	for _, want := range []string{
+		"Usage: ww rm [--force] [target]",
+		"       ww rm --cleanup",
+		"Without a target, opens a selector.",
+		"--cleanup removes only clearly safe worktrees.",
+		"clean merged branch worktrees",
+		"[IDLE] temporary worktrees",
+		"dirty worktrees",
+		"unbranched detached worktrees with commits",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected rm help to contain %q, got %q", want, got)
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
+	}
+}
+
 func TestRunRmInteractiveShowsSafetyJudgementAndConfirms(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}

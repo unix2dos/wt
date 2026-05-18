@@ -846,13 +846,14 @@ type removeConfig struct {
 	force   bool
 	json    bool
 	cleanup bool
+	help    bool
 	target  string
 }
 
 type removalCandidate struct {
-	item        worktree.Worktree
-	displayItem worktree.Worktree
-	preview     git.RemovalPreview
+	item          worktree.Worktree
+	displayItem   worktree.Worktree
+	preview       git.RemovalPreview
 	idleTemporary bool
 }
 
@@ -876,6 +877,10 @@ func runRemove(ctx context.Context, args []string, in io.Reader, out io.Writer, 
 	cfg, err := parseRemoveArgs(args)
 	if err != nil {
 		return writeCommandError("rm", out, errOut, cfg.json, err)
+	}
+	if cfg.help {
+		printRemoveHelp(out)
+		return 0
 	}
 
 	if cfg.json {
@@ -1014,6 +1019,8 @@ func parseRemoveArgs(args []string) (removeConfig, error) {
 			cfg.json = true
 		case arg == "--cleanup":
 			cfg.cleanup = true
+		case arg == "--help" || arg == "-h" || arg == "help":
+			cfg.help = true
 		case strings.HasPrefix(arg, "-"):
 			return cfg, appError{Code: "input.invalid_argument", Message: fmt.Sprintf("unknown option: %s", arg), ExitCode: 2}
 		default:
@@ -1032,6 +1039,9 @@ func parseRemoveArgs(args []string) (removeConfig, error) {
 		case cfg.target != "":
 			return cfg, appError{Code: "input.invalid_argument", Message: "--cleanup cannot be combined with a target", ExitCode: 2}
 		}
+	}
+	if cfg.help && (cfg.json || cfg.force || cfg.cleanup || cfg.target != "") {
+		return cfg, appError{Code: "input.invalid_argument", Message: "rm help cannot be combined with other arguments", ExitCode: 2}
 	}
 	return cfg, nil
 }
@@ -1704,4 +1714,20 @@ func printHelperHelp(out io.Writer) {
 	fmt.Fprintln(out, "[IDLE] temporary = clean detached worktree with no commits beyond the base branch.")
 	fmt.Fprintln(out, "version prints the binary and protocol version. Pass --json for the envelope form.")
 	fmt.Fprintln(out, "help prints this command summary.")
+}
+
+func printRemoveHelp(out io.Writer) {
+	fmt.Fprintln(out, "Usage: ww rm [--force] [target]")
+	fmt.Fprintln(out, "       ww rm --cleanup")
+	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "Without a target, opens a selector.")
+	fmt.Fprintln(out, "--cleanup removes only clearly safe worktrees.")
+	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "Safe:")
+	fmt.Fprintln(out, "  - clean merged branch worktrees")
+	fmt.Fprintln(out, "  - [IDLE] temporary worktrees")
+	fmt.Fprintln(out, "")
+	fmt.Fprintln(out, "Review:")
+	fmt.Fprintln(out, "  - dirty worktrees")
+	fmt.Fprintln(out, "  - unbranched detached worktrees with commits")
 }
